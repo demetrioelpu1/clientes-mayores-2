@@ -21,9 +21,7 @@
     zoom: DEFAULT_ZOOM,
     maxZoom: 19,
   });
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
-  // el zoom control queda oculto detrás de la barra de coordenadas; lo movemos un poco
-  document.querySelector('.leaflet-bottom.leaflet-right').style.marginBottom = '84px';
+  // Sin control de zoom +/- visible: se hace zoom con gestos (pellizcar / doble toque / rueda del mouse).
 
   const osmLayer = L.tileLayer.offline(OSM_URL, {
     layerId: 'osm',
@@ -139,40 +137,69 @@
     selectPoints = [];
     if (selectRect) { map.removeLayer(selectRect); selectRect = null; }
     $('#select-toolbar').classList.add('visible');
-    $('#select-hint').textContent = 'Toca dos puntos en el mapa para marcar el área (esquina 1 de 2).';
+    $('#select-row-corner2').style.display = 'none';
+    $('#select-crosshair').classList.remove('visible');
+    $('#select-hint').textContent = 'Toca el mapa para marcar la esquina 1 del área a descargar.';
     $('#select-confirm').disabled = true;
-    map.getContainer().style.cursor = 'crosshair';
   }
 
   function stopSelectMode() {
     selectMode = false;
     $('#select-toolbar').classList.remove('visible');
-    map.getContainer().style.cursor = '';
+    $('#select-row-corner2').style.display = 'none';
+    $('#select-crosshair').classList.remove('visible');
   }
 
-  function drawSelectRect() {
+  // Dibuja un rectángulo casi transparente entre la esquina 1 y el punto actual.
+  // preview=true → mientras se está buscando la esquina 2 (línea punteada, más transparente).
+  // preview=false → área ya fijada (línea sólida).
+  function updateLiveRect(latlng, preview) {
     if (selectRect) map.removeLayer(selectRect);
-    if (selectPoints.length === 2) {
-      selectRect = L.rectangle(L.latLngBounds(selectPoints[0], selectPoints[1]), {
-        color: '#f5822a',
-        weight: 2,
-        fillOpacity: 0.12,
-      }).addTo(map);
-    }
+    selectRect = L.rectangle(L.latLngBounds(selectPoints[0], latlng), {
+      color: '#f5822a',
+      weight: 2,
+      fillOpacity: preview ? 0.08 : 0.16,
+      dashArray: preview ? '6,6' : null,
+      interactive: false,
+    }).addTo(map);
+  }
+
+  function setCorner1(latlng) {
+    selectPoints = [latlng];
+    $('#select-hint').textContent = 'Mueve el mapa o toca la esquina opuesta para completar el área.';
+    $('#select-row-corner2').style.display = '';
+    $('#select-crosshair').classList.add('visible');
+    $('#select-confirm').disabled = true;
+    updateLiveRect(latlng, true);
+  }
+
+  function setCorner2(latlng) {
+    selectPoints[1] = latlng;
+    updateLiveRect(latlng, false);
+    $('#select-hint').textContent = 'Área marcada. Toca el mapa para rehacerla o continúa.';
+    $('#select-row-corner2').style.display = 'none';
+    $('#select-crosshair').classList.remove('visible');
+    $('#select-confirm').disabled = false;
   }
 
   map.on('click', (e) => {
     if (!selectMode) return;
-    if (selectPoints.length >= 2) selectPoints = [];
-    selectPoints.push(e.latlng);
-    drawSelectRect();
-    if (selectPoints.length === 1) {
-      $('#select-hint').textContent = 'Ahora toca la esquina opuesta (esquina 2 de 2).';
+    if (selectPoints.length !== 1) {
+      setCorner1(e.latlng);
     } else {
-      $('#select-hint').textContent = 'Área marcada. Puedes tocar de nuevo para rehacerla, o continuar.';
-      $('#select-confirm').disabled = false;
+      setCorner2(e.latlng);
     }
   });
+
+  // Vista previa en vivo del rectángulo: por mouse (desktop) y arrastrando el mapa (táctil).
+  map.on('mousemove', (e) => {
+    if (selectMode && selectPoints.length === 1) updateLiveRect(e.latlng, true);
+  });
+  map.on('move', () => {
+    if (selectMode && selectPoints.length === 1) updateLiveRect(map.getCenter(), true);
+  });
+
+  $('#select-place-corner2').addEventListener('click', () => setCorner2(map.getCenter()));
 
   $('#btn-download').addEventListener('click', () => startSelectMode());
   $('#select-cancel').addEventListener('click', () => {
@@ -182,7 +209,7 @@
   $('#select-use-view').addEventListener('click', () => {
     selectedBounds = boundsFromLeaflet(map.getBounds());
     if (selectRect) map.removeLayer(selectRect);
-    selectRect = L.rectangle(map.getBounds(), { color: '#f5822a', weight: 2, fillOpacity: 0.12 }).addTo(map);
+    selectRect = L.rectangle(map.getBounds(), { color: '#f5822a', weight: 2, fillOpacity: 0.16, interactive: false }).addTo(map);
     openDownloadSheet();
   });
   $('#select-confirm').addEventListener('click', () => {
@@ -250,29 +277,44 @@
     $('#download-step-progress').style.display = '';
     $('#progress-fill').style.width = '0%';
     $('#progress-label').textContent = `Descargando 0 / ${totalTiles} tiles…`;
+    $('#progress-sub').textContent = '';
 
     let done = 0;
+    let newCount = 0; // tiles descargados de la red (no existían)
+    let reusedCount = 0; // tiles que ya estaban guardados de un recorte anterior (no se vuelven a bajar)
+    let failedCount = 0; // tiles que no se pudieron obtener (sin red / fuera de cobertura)
     const CONCURRENCY = 6;
 
+    // IMPORTANTE: cada tile se identifica por "capa/z/x/y". Si dos recortes se
+    // solapan, comparten los MISMOS tiles guardados: no se descargan ni se
+    // duplican de nuevo, solo se reutiliza lo que ya está. Aquí solo se baja
+    // lo que realmente falta (lo "nuevo" respecto a lo ya descargado).
     async function fetchAndStore(layerId, z, x, y, url) {
       if (downloadCancelled) return;
       const key = MapDB.tileKey(layerId, z, x, y);
       try {
         const existing = await MapDB.getTile(key);
-        if (!existing) {
+        if (existing) {
+          reusedCount++;
+        } else {
           const resp = await fetch(url, { mode: 'cors' });
           if (resp.ok) {
             const blob = await resp.blob();
             await MapDB.putTile(key, blob);
+            newCount++;
+          } else {
+            failedCount++;
           }
         }
       } catch (e) {
+        failedCount++;
         /* tile no disponible (sin red o fuera de cobertura); se omite */
       }
       done++;
       const pct = Math.round((done / totalTiles) * 100);
       $('#progress-fill').style.width = pct + '%';
       $('#progress-label').textContent = `Descargando ${done} / ${totalTiles} tiles…`;
+      $('#progress-sub').textContent = `${newCount} nuevos · ${reusedCount} ya estaban descargados${failedCount ? ` · ${failedCount} no disponibles` : ''}`;
     }
 
     function urlFor(layerId, z, x, y) {
@@ -323,10 +365,15 @@
       maxZoom: max,
       layers,
       tileCount: totalTiles,
+      newTiles: newCount,
+      reusedTiles: reusedCount,
       createdAt: Date.now(),
     };
     await MapDB.putPack(pack);
-    showToast(`"${name}" guardado para uso offline`);
+    const summary = reusedCount > 0
+      ? `"${name}" guardado: ${newCount} tiles nuevos, ${reusedCount} ya los tenías de otro recorte (no se duplicaron).`
+      : `"${name}" guardado para uso offline (${newCount} tiles nuevos).`;
+    showToast(summary, 4200);
     closeSheet('#overlay-download');
     if (selectRect) { map.removeLayer(selectRect); selectRect = null; }
     selectedBounds = null;
@@ -373,9 +420,12 @@
       .forEach((pack) => {
         const item = document.createElement('div');
         item.className = 'pack-item';
+        const sharedNote = typeof pack.reusedTiles === 'number' && pack.reusedTiles > 0
+          ? ` · ${pack.reusedTiles.toLocaleString('es-PE')} compartidos con otro recorte`
+          : '';
         item.innerHTML = `
           <div class="pack-name">${pack.name}</div>
-          <div class="pack-meta">${layerLabel(pack.layers)} · zoom ${pack.minZoom}-${pack.maxZoom} · ${pack.tileCount.toLocaleString('es-PE')} tiles · ${fmtDate(pack.createdAt)}</div>
+          <div class="pack-meta">${layerLabel(pack.layers)} · zoom ${pack.minZoom}-${pack.maxZoom} · ${pack.tileCount.toLocaleString('es-PE')} tiles · ${fmtDate(pack.createdAt)}${sharedNote}</div>
           <div class="pack-actions">
             <button class="btn-secondary" data-action="goto">Ir a la zona</button>
             <button class="btn-danger" data-action="delete">Eliminar</button>
@@ -398,9 +448,14 @@
             return;
           }
           delBtn.textContent = 'Eliminando…';
-          await MapDB.deletePackTiles(pack);
+          // No borra tiles que otro recorte todavía necesite (áreas que se solapan).
+          const allPacks = await MapDB.getPacks();
+          const result = await MapDB.deletePackTiles(pack, allPacks);
           await MapDB.deletePackRecord(pack.id);
-          showToast(`"${pack.name}" eliminado`);
+          const msg = result.keptShared > 0
+            ? `"${pack.name}" eliminado (${result.keptShared} tiles se mantuvieron por estar en otro recorte)`
+            : `"${pack.name}" eliminado`;
+          showToast(msg, 3500);
           renderPacksList();
         });
         container.appendChild(item);
@@ -470,6 +525,19 @@
     $('#gps-status-text').textContent = text;
   }
 
+  function updateLocateButtonVisual() {
+    const btn = $('#btn-locate');
+    btn.classList.toggle('active', following);
+    btn.classList.toggle('tracking-paused', watchId !== null && !following);
+  }
+
+  function resetBottomBar() {
+    ['#val-lat', '#val-lon', '#val-acc', '#val-alt'].forEach((sel) => {
+      $(sel).textContent = '— —';
+      $(sel).classList.add('stale');
+    });
+  }
+
   function onPosition(pos) {
     lastPosition = pos;
     setGpsStatus('active', 'GPS activo');
@@ -482,24 +550,31 @@
 
   function onPositionError(err) {
     let msg = 'Error de GPS';
-    if (err.code === 1) msg = 'Permiso de ubicación denegado';
-    else if (err.code === 2) msg = 'Ubicación no disponible';
-    else if (err.code === 3) msg = 'Tiempo de espera agotado';
-    setGpsStatus('error', msg);
+    if (err.code === 1) {
+      msg = 'Permiso de ubicación denegado';
+      deactivateGps();
+    } else if (err.code === 2) {
+      msg = 'Ubicación no disponible';
+      setGpsStatus('error', msg);
+    } else if (err.code === 3) {
+      msg = 'Tiempo de espera agotado, reintentando…';
+      setGpsStatus('error', msg);
+    }
     showToast(msg, 3000);
   }
 
   function startWatch() {
     if (!navigator.geolocation) {
       showToast('Este dispositivo no soporta geolocalización');
-      return;
+      return false;
     }
-    if (watchId !== null) return;
+    if (watchId !== null) return true;
     watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
       enableHighAccuracy: true,
       maximumAge: 2000,
       timeout: 15000,
     });
+    return true;
   }
 
   function stopWatch() {
@@ -510,23 +585,73 @@
     setGpsStatus('inactive', 'GPS inactivo');
   }
 
-  $('#btn-locate').addEventListener('click', () => {
+  /* Apaga el GPS por completo: deja de escuchar la posición y quita el marcador del mapa. */
+  function deactivateGps() {
+    stopWatch();
+    following = false;
+    if (posMarker) { map.removeLayer(posMarker); posMarker = null; }
+    if (accCircle) { map.removeLayer(accCircle); accCircle = null; }
+    lastPosition = null;
+    resetBottomBar();
+    updateLocateButtonVisual();
+  }
+
+  /* Toque corto: enciende el GPS y sigue tu ubicación / alterna seguir-no seguir. */
+  function toggleLocateFollow() {
     if (watchId === null) {
-      startWatch();
+      const ok = startWatch();
+      if (!ok) return;
       following = true;
-      $('#btn-locate').classList.add('active');
-      showToast('Siguiendo tu ubicación');
+      updateLocateButtonVisual();
+      showToast('GPS activado — siguiendo tu ubicación');
     } else if (!following) {
       following = true;
-      $('#btn-locate').classList.add('active');
+      updateLocateButtonVisual();
       if (lastPosition) {
         map.setView([lastPosition.coords.latitude, lastPosition.coords.longitude], map.getZoom());
       }
+      showToast('Siguiendo tu ubicación');
     } else {
       following = false;
-      $('#btn-locate').classList.remove('active');
-      showToast('Dejaste de seguir tu ubicación (GPS sigue activo)');
+      updateLocateButtonVisual();
+      showToast('Dejaste de seguir — mueve el mapa libremente. Mantén presionado para apagar el GPS.', 3200);
     }
+  }
+
+  // Al arrastrar el mapa se cancela el "seguir" automáticamente, para no pelear con el usuario.
+  map.on('dragstart', () => {
+    if (following) {
+      following = false;
+      updateLocateButtonVisual();
+    }
+  });
+
+  // Toque corto = alternar seguir. Mantener presionado (~600ms) = apagar el GPS por completo.
+  const locateBtn = $('#btn-locate');
+  let locatePressTimer = null;
+  let locateLongPressFired = false;
+
+  function clearLocatePressTimer() {
+    if (locatePressTimer) { clearTimeout(locatePressTimer); locatePressTimer = null; }
+  }
+
+  locateBtn.addEventListener('pointerdown', () => {
+    locateLongPressFired = false;
+    clearLocatePressTimer();
+    locatePressTimer = setTimeout(() => {
+      locateLongPressFired = true;
+      if (watchId !== null) {
+        deactivateGps();
+        showToast('GPS desactivado');
+      }
+    }, 600);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((evt) => {
+    locateBtn.addEventListener(evt, clearLocatePressTimer);
+  });
+  locateBtn.addEventListener('click', () => {
+    if (locateLongPressFired) { locateLongPressFired = false; return; }
+    toggleLocateFollow();
   });
 
   /* ============ Registrar Service Worker ============ */

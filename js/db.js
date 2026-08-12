@@ -123,21 +123,44 @@ async function deletePackRecord(id) {
   });
 }
 
-/* Elimina todos los tiles pertenecientes a un pack (recorre su rango de tiles) */
-async function deletePackTiles(pack, onProgress) {
-  let done = 0;
+/* Devuelve el conjunto (Set) de claves de tile "layerId/z/x/y" que cubre un pack. */
+function tileKeysForPack(pack) {
+  const keys = new Set();
   for (const layerId of pack.layers) {
     for (let z = pack.minZoom; z <= pack.maxZoom; z++) {
       const range = tileRangeForBoundsAtZoom(pack.bounds, z);
       for (let x = range.minX; x <= range.maxX; x++) {
         for (let y = range.minY; y <= range.maxY; y++) {
-          await deleteTile(tileKey(layerId, z, x, y));
-          done++;
-          if (onProgress) onProgress(done);
+          keys.add(tileKey(layerId, z, x, y));
         }
       }
     }
   }
+  return keys;
+}
+
+/* Elimina los tiles de un pack, SIN borrar los que otro pack todavía necesita
+   (dos recortes que se solapan comparten los mismos tiles en el almacenamiento;
+   si uno se borra, el otro debe seguir viéndose offline). */
+async function deletePackTiles(pack, otherPacks, onProgress) {
+  const keepKeys = new Set();
+  for (const other of otherPacks || []) {
+    if (other.id === pack.id) continue;
+    for (const k of tileKeysForPack(other)) keepKeys.add(k);
+  }
+  const myKeys = tileKeysForPack(pack);
+  let done = 0;
+  let skipped = 0;
+  for (const key of myKeys) {
+    if (keepKeys.has(key)) {
+      skipped++;
+    } else {
+      await deleteTile(key);
+    }
+    done++;
+    if (onProgress) onProgress(done, myKeys.size, skipped);
+  }
+  return { deleted: done - skipped, keptShared: skipped };
 }
 
 /* Calcula el rango de tiles (x,y) que cubren unos bounds {north,south,east,west} en un zoom dado */
@@ -178,6 +201,7 @@ window.MapDB = {
   getPack,
   deletePackRecord,
   deletePackTiles,
+  tileKeysForPack,
   tileRangeForBoundsAtZoom,
   countTilesForPackSpec,
 };

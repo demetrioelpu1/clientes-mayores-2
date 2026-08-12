@@ -7,17 +7,32 @@ funcionar sin internet una vez descargadas las zonas de trabajo.
 
 - **Mapa OpenStreetMap** y **capa satelital** (Esri World Imagery), con opción
   **híbrida** (satelital + nombres de calles). Botón de capas (ícono de capas) arriba a la derecha.
-- **Descarga de recortes offline**: botón de descarga (⬇) → marca un área
-  tocando dos esquinas en el mapa (o "Usar vista actual") → elige capas y
-  rango de zoom → descarga los tiles y los guarda en el dispositivo
-  (IndexedDB). Se puede usar sin internet apenas se vuelve a esa zona.
+- **Descarga de recortes offline**: botón de descarga (⬇) → toca la esquina 1
+  del área → mientras mueves el mapa o el mouse aparece un **rectángulo
+  punteado casi transparente** mostrando en vivo de qué punto a qué punto
+  estás recortando → toca la esquina opuesta (o usa el botón "Fijar esquina 2
+  en el centro", útil en celular) → elige capas y rango de zoom → descarga
+  los tiles y los guarda en el dispositivo (IndexedDB). También puedes usar
+  "Usar vista actual" para descargar directo lo que ves en pantalla. Se puede
+  usar sin internet apenas se vuelve a esa zona.
 - **Gestor de recortes** (ícono de líneas): lista los recortes guardados con
   su nombre, capas, zoom, cantidad de tiles y fecha. Permite ir a la zona o
   eliminarla.
 - **GeolocationService**: usa `navigator.geolocation.watchPosition` con alta
-  precisión. Botón de ubicación (⊕) activa el GPS y el modo "seguir". La
-  barra inferior muestra LATITUD, LONGITUD, PRECISIÓN y ALTITUD en vivo, igual
-  que en la app de referencia.
+  precisión.
+  - **Toque corto** en el botón de ubicación (⊕): enciende el GPS y activa
+    "seguir" (el mapa se centra solo en tu posición). Un segundo toque deja
+    de seguir sin apagar el GPS (puedes desplazar el mapa libremente); otro
+    toque vuelve a centrar.
+  - **Arrastrar el mapa** mientras está en modo "seguir" cancela el
+    seguimiento automáticamente, para que nunca "jale" el mapa mientras
+    estás trabajando.
+  - **Mantener presionado** (~0.6 s) el botón de ubicación apaga el GPS por
+    completo (deja de escuchar la posición y quita el marcador del mapa).
+  - La barra inferior muestra LATITUD, LONGITUD, PRECISIÓN y ALTITUD en vivo,
+    igual que en la app de referencia.
+- Sin controles de zoom +/- en pantalla: se hace zoom con gestos (pellizcar,
+  doble toque, o la rueda del mouse en escritorio).
 - **Funciona offline como app**: un Service Worker cachea la aplicación en sí
   (HTML/CSS/JS), y un manifest permite "instalarla" en la pantalla de inicio
   del celular.
@@ -37,6 +52,36 @@ Opciones más simples, de menor a mayor esfuerzo:
 
 2. **GitHub Pages**: sube la carpeta a un repositorio de GitHub y activa
    Pages (Settings → Pages → Deploy from branch). Gratis y con URL estable.
+
+   **Primera vez (crear el repositorio):**
+   1. Entra a https://github.com → botón verde "New" (nuevo repositorio).
+   2. Ponle un nombre (ej. `catastro-app`), marca "Public", NO marques
+      "Add a README" → "Create repository".
+   3. En la página del repo vacío, haz clic en "uploading an existing file".
+   4. Descomprime el .zip en tu computadora primero. Arrastra **el
+      contenido** de la carpeta `catastro-app` (index.html, manifest.json,
+      sw.js, y las carpetas css/ js/ icons/) a la zona de carga — no arrastres
+      el .zip ni una carpeta contenedora, los archivos deben quedar en la
+      raíz del repositorio.
+   5. Baja y haz clic en "Commit changes".
+   6. Ve a Settings → Pages → en "Branch" elige `main` y carpeta `/ (root)`
+      → Save. Espera ~1 minuto y arriba te muestra la URL
+      (`https://tu-usuario.github.io/catastro-app/`).
+
+   **Para actualizar los archivos más adelante** (cuando yo te mande una
+   versión nueva): entra al repositorio → "Add file" → "Upload files" →
+   arrastra de nuevo todos los archivos actualizados (los que tengan el
+   mismo nombre se reemplazan automáticamente al hacer commit) → "Commit
+   changes". GitHub Pages se actualiza solo, en un minuto aprox.
+
+   **Importante sobre la caché**: esta app usa un Service Worker que guarda
+   los archivos para que abra sin internet. Si ya la abriste una vez en el
+   celular y luego subes una actualización, puede tardar en notarse el
+   cambio. Cada vez que suba una versión nueva, yo cambio el número de
+   versión dentro de `sw.js` (la línea `CACHE_NAME`) para forzar a que el
+   celular baje los archivos nuevos la próxima vez que abras la app con
+   internet — no necesitas hacer nada manual, solo abrir la app una vez
+   con datos/Wi-Fi después de actualizar.
 
 3. **Servidor propio**: cualquier hosting estático (Vercel, Firebase
    Hosting, un VPS con Nginx, etc.) sirviendo la carpeta tal cual.
