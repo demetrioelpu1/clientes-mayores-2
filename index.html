@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Catastro Técnico-Comercial</title>
+<meta name="theme-color" content="#17181c" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="css/leaflet.css" />
+<link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== Barra superior ===== -->
+  <div id="topbar">
+    <div class="title-block">
+      <div class="accent-dot"></div>
+      <div class="titles">
+        <h1>CATASTRO TÉCNICO-COMERCIAL</h1>
+        <div class="subtitle" id="subtitle-text">Módulo 01 · Mapa de campo</div>
+      </div>
+    </div>
+    <div class="gps-pill" id="gps-pill">
+      <div class="dot" id="gps-dot"></div>
+      <span id="gps-status-text">GPS inactivo</span>
+    </div>
+  </div>
+
+  <!-- ===== Mapa ===== -->
+  <div id="map-wrap">
+    <div id="map"></div>
+
+    <!-- Barra de selección de área (modo descarga offline) -->
+    <div id="select-toolbar">
+      <div class="hint" id="select-hint">Toca dos puntos en el mapa para marcar el área a descargar (esquina 1 de 2).</div>
+      <div class="row">
+        <button class="btn-secondary" id="select-use-view">Usar vista actual</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-secondary" id="select-cancel">Cancelar</button>
+          <button class="btn-primary" id="select-confirm" disabled>Continuar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-pill" id="packs-count-pill">0 recortes descargados</div>
+
+    <!-- Controles flotantes -->
+    <div id="right-controls">
+      <div class="fab" id="btn-layers" title="Cambiar capa de mapa">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+      </div>
+      <div class="fab" id="btn-download" title="Descargar recorte de mapa (offline)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </div>
+      <div class="fab" id="btn-packs" title="Recortes guardados">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="14" y2="18"></line></svg>
+        <div class="badge" id="packs-badge" style="display:none;">0</div>
+      </div>
+      <div class="fab" id="btn-locate" title="Ubicarme / seguir GPS">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Barra inferior de coordenadas ===== -->
+  <div id="bottombar">
+    <div class="cell">
+      <div class="label">LATITUD</div>
+      <div class="value stale" id="val-lat">— —</div>
+    </div>
+    <div class="cell">
+      <div class="label">LONGITUD</div>
+      <div class="value stale" id="val-lon">— —</div>
+    </div>
+    <div class="cell">
+      <div class="label">PRECISIÓN</div>
+      <div class="value stale" id="val-acc">— —</div>
+    </div>
+    <div class="cell">
+      <div class="label">ALTITUD</div>
+      <div class="value stale" id="val-alt">— —</div>
+    </div>
+  </div>
+
+  <!-- ===== Panel: capas ===== -->
+  <div class="sheet-overlay" id="overlay-layers">
+    <div class="sheet">
+      <h2>Capa de mapa <span class="close" data-close="overlay-layers">✕</span></h2>
+      <div class="layer-option" data-layer="osm">
+        <div>
+          <div class="name">OpenStreetMap</div>
+          <div class="desc">Mapa de calles estándar</div>
+        </div>
+      </div>
+      <div class="layer-option" data-layer="sat">
+        <div>
+          <div class="name">Satelital</div>
+          <div class="desc">Imágenes satelitales (Esri World Imagery)</div>
+        </div>
+      </div>
+      <div class="layer-option" data-layer="hybrid">
+        <div>
+          <div class="name">Híbrido</div>
+          <div class="desc">Satelital + nombres de calles</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Panel: descargar recorte ===== -->
+  <div class="sheet-overlay" id="overlay-download">
+    <div class="sheet">
+      <h2>Descargar recorte offline <span class="close" data-close="overlay-download">✕</span></h2>
+      <div id="download-step-form">
+        <div class="form-row">
+          <label>Nombre del recorte</label>
+          <input type="text" id="pack-name" placeholder="Ej: Zona Puno - Jr. Independencia" />
+        </div>
+        <div class="form-row">
+          <label>Capas a descargar</label>
+          <select id="pack-layers">
+            <option value="osm">Solo OpenStreetMap</option>
+            <option value="sat">Solo Satelital</option>
+            <option value="osm,sat">OpenStreetMap + Satelital</option>
+          </select>
+        </div>
+        <div class="zoom-row">
+          <div class="form-row">
+            <label>Zoom mínimo</label>
+            <input type="text" inputmode="numeric" id="pack-zoom-min" value="13" />
+          </div>
+          <div class="form-row">
+            <label>Zoom máximo</label>
+            <input type="text" inputmode="numeric" id="pack-zoom-max" value="18" />
+          </div>
+        </div>
+        <div class="progress-text" id="pack-estimate">Selecciona un área en el mapa primero.</div>
+        <button class="btn-primary" id="pack-start-btn" style="width:100%; padding:11px; margin-top:6px;">Iniciar descarga</button>
+      </div>
+      <div id="download-step-progress" style="display:none;">
+        <div class="progress-text" id="progress-label">Descargando 0 / 0 tiles…</div>
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <button class="btn-danger" id="pack-cancel-btn" style="width:100%; padding:10px;">Cancelar descarga</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Panel: recortes guardados ===== -->
+  <div class="sheet-overlay" id="overlay-packs">
+    <div class="sheet">
+      <h2>Recortes descargados <span class="close" data-close="overlay-packs">✕</span></h2>
+      <div id="packs-list"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="js/vendor/leaflet.js"></script>
+<script src="js/db.js"></script>
+<script src="js/offline-tilelayer.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
