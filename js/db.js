@@ -1,10 +1,12 @@
 /* db.js — capa de acceso a IndexedDB para tiles de mapa y recortes (packs) offline */
 
 const DB_NAME = 'catastro-map-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_TILES = 'tiles';
 const STORE_PACKS = 'packs';
 const STORE_NETWORK = 'network_features'; // postes, tramos, subestaciones cargados desde KMZ/KML
+const STORE_ENCUESTAS = 'encuestas';      // una por cliente mayor (Fase 3)
+const STORE_FOTOS = 'fotos';              // Blobs aparte: listar encuestas no debe arrastrar MB
 
 let _dbPromise = null;
 
@@ -25,6 +27,17 @@ function openDB() {
         const store = db.createObjectStore(STORE_NETWORK, { keyPath: 'id' });
         store.createIndex('layer', 'layer');
         store.createIndex('setName', 'setName');
+      }
+      if (!db.objectStoreNames.contains(STORE_ENCUESTAS)) {
+        // La clave es el código SED del GIS: una encuesta por cliente mayor.
+        const store = db.createObjectStore(STORE_ENCUESTAS, { keyPath: 'sed' });
+        store.createIndex('setSlug', 'setSlug');
+        store.createIndex('alimentador', 'alimentador');
+        store.createIndex('estado', 'estado');
+      }
+      if (!db.objectStoreNames.contains(STORE_FOTOS)) {
+        // key: "<sed>/<bloque>/<idFoto>", value: Blob ya comprimido
+        db.createObjectStore(STORE_FOTOS);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -245,6 +258,101 @@ async function clearAllNetworkFeatures() {
   });
 }
 
+/* ---- encuestas (Fase 3) ---- */
+
+async function putEncuesta(encuesta) {
+  const store = await tx(STORE_ENCUESTAS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(encuesta);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getEncuesta(sed) {
+  const store = await tx(STORE_ENCUESTAS, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(sed);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getAllEncuestas() {
+  const store = await tx(STORE_ENCUESTAS, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* Solo {sed: estado} — para pintar la lista sin traer las encuestas enteras. */
+async function getEstadosEncuestas() {
+  const todas = await getAllEncuestas();
+  const mapa = {};
+  todas.forEach((e) => { mapa[e.sed] = e.estado; });
+  return mapa;
+}
+
+async function deleteEncuesta(sed) {
+  const store = await tx(STORE_ENCUESTAS, 'readwrite');
+  await new Promise((resolve, reject) => {
+    const req = store.delete(sed);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+  return deleteFotosDe(sed);
+}
+
+/* ---- fotos ---- */
+
+function fotoKey(sed, bloque, idFoto) {
+  return `${sed}/${bloque}/${idFoto}`;
+}
+
+async function putFoto(key, blob) {
+  const store = await tx(STORE_FOTOS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(blob, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getFoto(key) {
+  const store = await tx(STORE_FOTOS, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteFoto(key) {
+  const store = await tx(STORE_FOTOS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function listarFotoKeys(sed) {
+  const store = await tx(STORE_FOTOS, 'readonly');
+  return new Promise((resolve, reject) => {
+    const rango = IDBKeyRange.bound(`${sed}/`, `${sed}/￿`);
+    const req = store.getAllKeys(rango);
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteFotosDe(sed) {
+  const keys = await listarFotoKeys(sed);
+  for (const k of keys) await deleteFoto(k);
+}
+
 window.MapDB = {
   tileKey,
   putTile,
@@ -265,4 +373,14 @@ window.MapDB = {
   getNetworkFeaturesByLayer,
   countNetworkFeaturesByLayer,
   clearAllNetworkFeatures,
+  putEncuesta,
+  getEncuesta,
+  getAllEncuestas,
+  getEstadosEncuestas,
+  deleteEncuesta,
+  fotoKey,
+  putFoto,
+  getFoto,
+  deleteFoto,
+  listarFotoKeys,
 };

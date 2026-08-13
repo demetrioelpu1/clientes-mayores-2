@@ -78,8 +78,26 @@
     toastTimer = setTimeout(() => el.classList.remove('visible'), duration);
   }
 
+  /* Botón físico "Atrás" de Android: sin esto, el técnico lo toca esperando
+     volver un paso y se le cierra la app entera. Se deja un estado centinela
+     en el historial mientras haya un panel abierto; al volver atrás se avisa a
+     los módulos y se repone el centinela. */
+  const manejadoresAtras = [];
+
+  function ponerCentinela() {
+    if (!history.state || !history.state.panelAbierto) {
+      history.pushState({ panelAbierto: true }, '');
+    }
+  }
+
+  window.addEventListener('popstate', () => {
+    const manejado = manejadoresAtras.some((fn) => fn());
+    if (manejado) history.pushState({ panelAbierto: true }, '');
+  });
+
   function openSheet(id) {
     $(id).classList.add('visible');
+    ponerCentinela();
   }
   function closeSheet(id) {
     $(id).classList.remove('visible');
@@ -93,6 +111,14 @@
     btn.addEventListener('click', () => closeSheet('#' + btn.dataset.close));
   });
 
+  /* ============ Puente para los módulos externos (campana.js) ============
+     app.js vive dentro de una IIFE: esto es lo único que se comparte afuera. */
+  window.AppBridge = {
+    map, showToast, openSheet, closeSheet,
+    // fn() debe devolver true si consumió el "atrás"
+    registrarAtras: (fn) => manejadoresAtras.push(fn),
+  };
+
   /* ============ Panel de capas ============ */
   $('#btn-layers').addEventListener('click', () => openSheet('#overlay-layers'));
   $$('.layer-option').forEach((opt) => {
@@ -104,8 +130,9 @@
 
   /* ============ Estado de conexión + SET activa en el subtítulo ============ */
   function currentSetLabel() {
-    const set = getActiveSet();
-    return set ? `${set} · Red eléctrica` : 'Módulo 01 · Mapa de campo';
+    // La zona de trabajo la maneja campana.js (Fase 2).
+    const zona = window.Campana && Campana.hayZonaActiva() ? Campana.etiquetaActual() : '';
+    return zona || 'Elegir zona de trabajo';
   }
   function updateConnectionStatus() {
     const subtitle = $('#subtitle-text');
@@ -661,6 +688,9 @@
   const SET_STORAGE_KEY = 'catastro:activeSet';
 
   function getActiveSet() {
+    // La zona la fija campana.js; el localStorage queda solo como respaldo
+    // para lo que se importó a mano por KMZ antes de tener catálogo.
+    if (window.Campana && Campana.hayZonaActiva()) return Campana.etiquetaActual();
     return localStorage.getItem(SET_STORAGE_KEY) || '';
   }
   function setActiveSet(name) {
@@ -670,67 +700,23 @@
     localStorage.removeItem(SET_STORAGE_KEY);
   }
 
+  // La SET ya no se escribe a mano: se elige de la cascada de campana.js.
   function showSetStartModal() {
-    $('#set-name-input').value = '';
-    $('#overlay-set-start').classList.add('visible');
-    setTimeout(() => $('#set-name-input').focus(), 50);
-  }
-  function hideSetStartModal() {
-    $('#overlay-set-start').classList.remove('visible');
+    if (window.Campana) Campana.abrirSelector();
   }
 
-  $('#set-start-btn').addEventListener('click', () => {
-    const name = $('#set-name-input').value.trim();
-    if (!name) {
-      showToast('Escribe el nombre de la SET para comenzar (ej: SET ANANEA)');
-      return;
-    }
-    setActiveSet(name);
-    hideSetStartModal();
-    updateConnectionStatus();
-    showToast(`Trabajando en «${name}»`);
+  // El subtítulo de la barra superior y el botón flotante abren lo mismo:
+  // la cascada para cambiar de zona de trabajo.
+  $('#btn-set-menu').addEventListener('click', () => {
+    if (window.Campana) Campana.abrirSelector();
   });
-  $('#set-name-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') $('#set-start-btn').click();
+  $('#btn-campana').addEventListener('click', () => {
+    if (window.Campana) Campana.abrirSelector();
   });
 
-  $('#btn-set-menu').addEventListener('click', async () => {
-    const set = getActiveSet();
-    const counts = await MapDB.countNetworkFeaturesByLayer();
-    const total = Object.values(counts).reduce((a, b) => a + b, 0);
-    $('#set-menu-current').innerHTML =
-      `<strong>${set || '(sin SET activa)'}</strong><br/>${total.toLocaleString('es-PE')} elementos de red cargados`;
-    openSheet('#overlay-set-menu');
-  });
-
-  $('#set-menu-export-btn').addEventListener('click', () => exportNetworkData());
-
-  (() => {
-    let confirming = false;
-    $('#set-menu-finish-btn').addEventListener('click', async () => {
-      const btn = $('#set-menu-finish-btn');
-      if (!confirming) {
-        confirming = true;
-        btn.textContent = '¿Seguro? Se descargará la info y se limpiará. Toca de nuevo.';
-        setTimeout(() => { confirming = false; btn.textContent = 'Terminar esta SET y empezar otra'; }, 4000);
-        return;
-      }
-      confirming = false;
-      btn.textContent = 'Terminar esta SET y empezar otra';
-      const finishedName = getActiveSet();
-      const all = await MapDB.getAllNetworkFeatures();
-      if (all.length > 0) {
-        await exportNetworkData();
-      }
-      await MapDB.clearAllNetworkFeatures();
-      clearNetworkLayersFromMap();
-      refreshNetworkPanel();
-      clearActiveSet();
-      closeSheet('#overlay-set-menu');
-      showToast(`«${finishedName}» finalizada`);
-      showSetStartModal();
-    });
-  })();
+  // El panel "SET de trabajo" desapareció: exportar y limpiar la red importada
+  // a mano siguen estando en el panel de Red eléctrica base, y cambiar de zona
+  // ahora es simplemente elegir otra en la cascada.
 
   /* ============ Red eléctrica base (postes, tramos, subestaciones) ============ */
   const networkLayerGroups = {};
@@ -1025,9 +1011,7 @@
   /* ============ Inicialización ============ */
   updateConnectionStatus();
   loadAllNetworkFeaturesToMap();
-  if (!getActiveSet()) {
-    showSetStartModal();
-  }
+  // La zona de trabajo la abre campana.js al iniciar (ver index.html).
   checkPendingSharedFile();
 
   /* ============ Registrar Service Worker ============ */

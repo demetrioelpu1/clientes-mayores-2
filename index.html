@@ -55,6 +55,13 @@
 
     <!-- Controles flotantes -->
     <div id="right-controls">
+      <div class="fab" id="btn-campana" title="Zona de trabajo y clientes mayores">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v15M15 6v15"></path><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"></path></svg>
+        <div class="badge" id="campana-badge" style="display:none;">0</div>
+      </div>
+      <div class="fab" id="btn-resultados" title="Resultados y descarga">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="13"></line><line x1="12" y1="20" x2="12" y2="5"></line><line x1="18" y1="20" x2="18" y2="9"></line></svg>
+      </div>
       <div class="fab" id="btn-layers" title="Cambiar capa de mapa">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
       </div>
@@ -203,24 +210,81 @@
     </div>
   </div>
 
-  <!-- ===== Panel: menú de la SET actual ===== -->
-  <div class="sheet-overlay" id="overlay-set-menu">
+  <!-- ===== Panel: zona de trabajo (Fase 2) — sistema › SET › alimentador › clientes ===== -->
+  <div class="sheet-overlay" id="overlay-campana">
     <div class="sheet">
-      <h2>SET de trabajo <span class="close" data-close="overlay-set-menu">✕</span></h2>
-      <div class="progress-text" id="set-menu-current" style="text-align:left; margin-bottom:14px;"></div>
-      <button class="btn-secondary" id="set-menu-export-btn" style="width:100%; margin-bottom:8px;">⬇ Descargar información de esta SET</button>
-      <button class="btn-danger" id="set-menu-finish-btn" style="width:100%;">Terminar esta SET y empezar otra</button>
+      <h2>
+        <span class="h2-izq">
+          <button class="sheet-atras" id="campana-atras" aria-label="Atrás">&#8592;</button>
+          <span id="campana-titulo">Zona de trabajo</span>
+        </span>
+        <span class="close" data-close="overlay-campana">✕</span>
+      </h2>
+      <div class="campana-migas" id="campana-migas"></div>
+      <div id="campana-cuerpo"></div>
     </div>
   </div>
 
-  <!-- ===== Modal: iniciar trabajo (pregunta la SET) ===== -->
-  <div class="modal-overlay" id="overlay-set-start">
-    <div class="modal-card">
-      <h2>Iniciar trabajo</h2>
-      <p>¿Con qué SET desea iniciar?</p>
-      <input type="text" id="set-name-input" placeholder="Ej: SET ANANEA" autocomplete="off" />
-      <div class="modal-hint">Es el nombre de la subestación (SET = Subestación Eléctrica de Transformación) con la que vas a trabajar ahora. Al terminar, podrás descargar la información y empezar otra.</div>
-      <button class="btn-primary" id="set-start-btn" style="width:100%; padding:12px;">Comenzar</button>
+  <!-- ===== Panel: ficha de un cliente mayor ===== -->
+  <div class="sheet-overlay" id="overlay-cliente">
+    <div class="sheet">
+      <h2>
+        <span class="h2-izq">
+          <button class="sheet-atras" id="cliente-atras" aria-label="Atrás">&#8592;</button>
+          <span id="cliente-nombre">Cliente</span>
+        </span>
+        <span class="close" data-close="overlay-cliente">✕</span>
+      </h2>
+      <div class="cliente-sub" id="cliente-sub"></div>
+      <div id="cliente-cuerpo"></div>
+      <div class="cliente-acciones">
+        <button class="btn-secondary" id="cliente-ir-btn">Ver en el mapa</button>
+        <button class="btn-primary" id="cliente-encuesta-btn">Iniciar encuesta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Panel: toma de datos (Fase 3) ===== -->
+  <div class="sheet-overlay" id="overlay-encuesta">
+    <div class="sheet sheet-alta">
+      <h2>
+        <span class="h2-izq">
+          <button class="sheet-atras" id="encuesta-atras-cab" aria-label="Atrás">&#8592;</button>
+          <span id="encuesta-titulo">Toma de datos</span>
+        </span>
+        <span class="close" id="encuesta-cerrar">✕</span>
+      </h2>
+      <div class="cliente-sub" id="encuesta-sub"></div>
+
+      <div class="paso-cabecera">
+        <div class="paso-bloque" id="encuesta-bloque"></div>
+        <div class="paso-num" id="encuesta-paso-num"></div>
+      </div>
+      <div class="paso-barra"><div class="paso-barra-relleno" id="encuesta-barra-relleno"></div></div>
+      <select class="paso-salto" id="encuesta-salto"></select>
+
+      <div id="encuesta-cuerpo"></div>
+
+      <div class="paso-pie">
+        <button class="btn-secondary" id="encuesta-atras">Atrás</button>
+        <button class="btn-primary" id="encuesta-siguiente">Siguiente</button>
+      </div>
+      <div class="paso-progreso" id="encuesta-progreso"></div>
+    </div>
+  </div>
+
+  <!-- ===== Panel: resultados y descarga (Fase 4) ===== -->
+  <div class="sheet-overlay" id="overlay-resultados">
+    <div class="sheet sheet-alta">
+      <h2>
+        <span class="h2-izq"><span>Resultados</span></span>
+        <span class="close" data-close="overlay-resultados">✕</span>
+      </h2>
+      <div id="resultados-cuerpo"></div>
+      <div class="res-acciones">
+        <button class="btn-secondary" id="resultados-excel">⬇ Solo Excel</button>
+        <button class="btn-primary" id="resultados-zip">⬇ Excel + fotos</button>
+      </div>
     </div>
   </div>
 
@@ -234,5 +298,10 @@
 <script src="js/kmz.js"></script>
 <script src="js/network.js"></script>
 <script src="js/app.js"></script>
+<script src="js/campana.js"></script>
+<script src="js/encuesta.js"></script>
+<script src="js/xlsx.js"></script>
+<script src="js/resultados.js"></script>
+<script>Campana.iniciar();</script>
 </body>
 </html>

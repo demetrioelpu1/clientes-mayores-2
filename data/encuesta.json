@@ -1,0 +1,334 @@
+{
+  "_meta": {
+    "version": "0.2",
+    "fecha": "2026-08-13",
+    "nombre_visible": "Toma de datos",
+    "fuente": "Formato de columnas dictado por el usuario (13/08/2026), que modifica el Excel '001 TOMA DE DATOS DE INSPECION ANANEA-RINCONADA.xlsx'",
+    "regla": "1 toma de datos = 1 cliente mayor = 1 fila del Excel de salida",
+    "cambios_vs_excel_ananea": [
+      "CODIGO DE SUMNISTRO -> 'codigo ruta' (etiqueta pegada en el trafomix)",
+      "NOMBRE CLIENTE -> no se pide al tecnico; se rellena solo desde el GIS",
+      "RESPONSABLE/NOMBRE -> 'nombre responsable (tecnico)', dentro del bloque CLIENTE",
+      "FOTOGRAFIAS: ya no es un bloque aparte; cada bloque tiene sus fotos",
+      "ESTADO DE ACOMETIDA: ahora lista desplegable malo/regular/bueno"
+    ],
+    "sobre_los_pasos": "El formulario se recorre paso a paso, de 2-4 campos por pantalla. Los campos van agrupados por lo que el tecnico lee de una misma placa o hace de una sola vez, para no obligarlo a saltar entre equipos."
+  },
+
+  "_resuelto": [
+    "codigo_ruta: es un codigo pegado fisicamente en el trafomix; el tecnico lo lee en campo",
+    "nombre_cliente: no se pide al tecnico; se rellena solo desde el GIS (opcional)",
+    "fotos: 16 en total, definidas en las filas 13-32 del Excel de Ananea (6 + 7 + 3)",
+    "clase_precision: texto libre; se normaliza al exportar (0.5 y 0,5 -> mismo valor)",
+    "trafomix: siempre existe, es lo que baja la tension para poder lecturar con el medidor"
+  ],
+
+  "_dudas": [
+    "foto 7 del sistema de medicion: numerada en el Excel pero sin etiqueta",
+    "estado_cajatoma: texto libre o desplegable (el usuario va a preguntar)"
+  ],
+
+  "automaticos": [
+    { "id": "responsable",       "label": "Responsable",          "origen": "tecnico" },
+    { "id": "latitud",           "label": "Latitud",              "origen": "gps" },
+    { "id": "longitud",          "label": "Longitud",             "origen": "gps" },
+    { "id": "precision_gps",     "label": "Precisión GPS (m)",    "origen": "gps" },
+    { "id": "alimentador",       "label": "Alimentador",          "origen": "gis" },
+    { "id": "sistema_electrico", "label": "Sistema eléctrico",    "origen": "gis" },
+    { "id": "fecha_inspeccion",  "label": "Fecha de inspección",  "origen": "auto" }
+  ],
+
+  "exportacion": {
+    "hoja": "TOMA DE DATOS",
+    "_nota": "Las 48 columnas del formato de Ananea, en su orden original. 'campo' apunta a bloque.campo de los datos capturados; 'origen' son valores derivados que arma la app.",
+    "columnas": [
+      { "grupo": "",             "header": "ITEM",                              "origen": "item" },
+      { "grupo": "RESPONSABLE",  "header": "NOMBRE",                            "campo": "cliente.responsable" },
+      { "grupo": "CLIENTE",      "header": "CÓDIGO RUTA",                       "campo": "cliente.codigo_ruta" },
+      { "grupo": "CLIENTE",      "header": "NOMBRE CLIENTE",                    "origen": "gis.nombre" },
+      { "grupo": "CLIENTE",      "header": "COORDENADAS DE UBICACIÓN",          "origen": "coordenadas" },
+      { "grupo": "CLIENTE",      "header": "ALIMENTADOR",                       "campo": "cliente.alimentador" },
+      { "grupo": "CLIENTE",      "header": "SISTEMA ELÉCTRICO",                 "campo": "cliente.sistema_electrico" },
+      { "grupo": "CLIENTE",      "header": "FECHA DE INSPECCIÓN",               "campo": "cliente.fecha_inspeccion" },
+
+      { "grupo": "TRAFOMIX",     "header": "SERIE",                             "campo": "trafomix.serie" },
+      { "grupo": "TRAFOMIX",     "header": "MARCA",                             "campo": "trafomix.marca" },
+      { "grupo": "TRAFOMIX",     "header": "MODELO",                            "campo": "trafomix.modelo" },
+      { "grupo": "TRAFOMIX",     "header": "RELACIÓN DE TENSIÓN",               "campo": "trafomix.relacion_tension" },
+      { "grupo": "TRAFOMIX",     "header": "RELACIÓN DE CORRIENTE",             "campo": "trafomix.relacion_corriente" },
+      { "grupo": "TRAFOMIX",     "header": "AÑO FABRICACIÓN",                   "campo": "trafomix.anio_fabricacion" },
+      { "grupo": "TRAFOMIX",     "header": "CLASE DE PRECISIÓN",                "campo": "trafomix.clase_precision", "normalizar": "decimal" },
+      { "grupo": "TRAFOMIX",     "header": "POTENCIA EN TENSIÓN",               "campo": "trafomix.potencia_tension" },
+      { "grupo": "TRAFOMIX",     "header": "POTENCIA EN CORRIENTE",             "campo": "trafomix.potencia_corriente" },
+      { "grupo": "TRAFOMIX",     "header": "N° PRECINTO EXISTENTE 1",           "campo": "trafomix.precinto_exist_1" },
+      { "grupo": "TRAFOMIX",     "header": "N° PRECINTO EXISTENTE 2",           "campo": "trafomix.precinto_exist_2" },
+      { "grupo": "TRAFOMIX",     "header": "N° PRECINTO INSTALADO 1",           "campo": "trafomix.precinto_inst_1" },
+      { "grupo": "TRAFOMIX",     "header": "N° PRECINTO INSTALADO 2",           "campo": "trafomix.precinto_inst_2" },
+
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "SERIE MEDIDOR",              "campo": "medidor.serie" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "MARCA MEDIDOR",              "campo": "medidor.marca" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "MODELO MEDIDOR",             "campo": "medidor.modelo" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "CLASE PRECISIÓN",            "campo": "medidor.clase_precision", "normalizar": "decimal" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "CONSTANTE DE MEDICIÓN",      "campo": "medidor.constante_medicion" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "AÑO DE FABRICACIÓN",         "campo": "medidor.anio_fabricacion" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "N° PRECINTO EXISTENTE 1",    "campo": "medidor.precinto_exist_1" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "N° PRECINTO EXISTENTE 2",    "campo": "medidor.precinto_exist_2" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "N° PRECINTO EXISTENTE 3",    "campo": "medidor.precinto_exist_3" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "N° PRECINTO INSTALADO 1",    "campo": "medidor.precinto_inst_1" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "N° PRECINTO INSTALADO 2",    "campo": "medidor.precinto_inst_2" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "N° PRECINTO INSTALADO 3",    "campo": "medidor.precinto_inst_3" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "CAPACIDAD DE CORRIENTE DE MEDIDOR", "campo": "medidor.capacidad_corriente" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "UBICACIÓN DE CAJATOMA",      "campo": "medidor.ubicacion_cajatoma" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "ESTADO DE CAJATOMA",         "campo": "medidor.estado_cajatoma" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "PRECINTO DE CAJATOMA EXISTENTE", "campo": "medidor.precinto_cajatoma_exist" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "PRECINTO DE CAJATOMA INSTALADO",  "campo": "medidor.precinto_cajatoma_inst" },
+      { "grupo": "SISTEMA DE MEDICIÓN", "header": "ESTADO DE ACOMETIDA (CABLE CONTROL)", "campo": "medidor.estado_acometida" },
+
+      { "grupo": "TRANSFORMADOR", "header": "N° SERIE",                         "campo": "transformador.n_serie" },
+      { "grupo": "TRANSFORMADOR", "header": "POTENCIA",                         "campo": "transformador.potencia" },
+      { "grupo": "TRANSFORMADOR", "header": "MARCA",                            "campo": "transformador.marca" },
+      { "grupo": "TRANSFORMADOR", "header": "MODELO",                           "campo": "transformador.modelo" },
+      { "grupo": "TRANSFORMADOR", "header": "AÑO FABRICACIÓN",                  "campo": "transformador.anio_fabricacion" },
+      { "grupo": "TRANSFORMADOR", "header": "CORRIENTE FASE R",                 "campo": "transformador.corriente_r" },
+      { "grupo": "TRANSFORMADOR", "header": "CORRIENTE FASE S",                 "campo": "transformador.corriente_s" },
+      { "grupo": "TRANSFORMADOR", "header": "CORRIENTE FASE T",                 "campo": "transformador.corriente_t" },
+
+      { "grupo": "", "header": "OBSERVACIÓN", "campo": "observaciones.observacion" }
+    ]
+  },
+
+  "bloques": [
+    {
+      "id": "cliente",
+      "titulo": "CLIENTE",
+      "pasos": [
+        {
+          "id": "cliente_ruta",
+          "titulo": "Responsable y código de ruta",
+          "ayuda": "El código de ruta es la etiqueta pegada en el trafomix.",
+          "campos": [
+            { "id": "responsable",  "label": "Nombre del responsable (técnico)", "tipo": "texto", "recordar": true },
+            { "id": "codigo_ruta",  "label": "Código ruta", "tipo": "texto", "requerido": true }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "trafomix",
+      "titulo": "TRAFOMIX",
+      "pasos": [
+        {
+          "id": "trafomix_id",
+          "titulo": "Identificación",
+          "ayuda": "Se leen de la placa del trafomix.",
+          "campos": [
+            { "id": "serie",  "label": "Serie",  "tipo": "texto" },
+            { "id": "marca",  "label": "Marca",  "tipo": "texto", "sugerencias": true },
+            { "id": "modelo", "label": "Modelo", "tipo": "texto", "sugerencias": true }
+          ]
+        },
+        {
+          "id": "trafomix_relaciones",
+          "titulo": "Relaciones",
+          "campos": [
+            { "id": "relacion_tension",   "label": "Relación de tensión",   "tipo": "texto", "placeholder": "10000/100" },
+            { "id": "relacion_corriente", "label": "Relación de corriente", "tipo": "texto", "placeholder": "50/5" }
+          ]
+        },
+        {
+          "id": "trafomix_caracteristicas",
+          "titulo": "Características",
+          "campos": [
+            { "id": "clase_precision",  "label": "Clase de precisión", "tipo": "texto" },
+            { "id": "anio_fabricacion", "label": "Año de fabricación", "tipo": "entero", "min": 1950, "max": 2030 }
+          ]
+        },
+        {
+          "id": "trafomix_potencias",
+          "titulo": "Potencias",
+          "campos": [
+            { "id": "potencia_tension",   "label": "Potencia en tensión",   "tipo": "texto" },
+            { "id": "potencia_corriente", "label": "Potencia en corriente", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "trafomix_precintos_exist",
+          "titulo": "Precintos existentes",
+          "ayuda": "Los que encontraste al llegar.",
+          "campos": [
+            { "id": "precinto_exist_1", "label": "N° precinto existente 1", "tipo": "texto" },
+            { "id": "precinto_exist_2", "label": "N° precinto existente 2", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "trafomix_precintos_inst",
+          "titulo": "Precintos instalados",
+          "ayuda": "Los que dejaste puestos.",
+          "campos": [
+            { "id": "precinto_inst_1", "label": "N° precinto instalado 1", "tipo": "texto" },
+            { "id": "precinto_inst_2", "label": "N° precinto instalado 2", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "trafomix_fotos",
+          "titulo": "Fotos del trafomix",
+          "fotos": [
+            { "n": 1, "id": "foto_panoramica",     "label": "Panorámica" },
+            { "n": 2, "id": "foto_placa_trafomix", "label": "Placa de trafomix" },
+            { "n": 3, "id": "foto_precintos",      "label": "Precintos" },
+            { "n": 4, "id": "foto_conexionado",    "label": "Conexionado" },
+            { "n": 5, "id": "foto_pasatapas",      "label": "Pasatapas" },
+            { "n": 6, "id": "foto_mediciones",     "label": "Mediciones" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "medidor",
+      "titulo": "SISTEMA DE MEDICIÓN",
+      "pasos": [
+        {
+          "id": "medidor_id",
+          "titulo": "Identificación del medidor",
+          "campos": [
+            { "id": "serie",  "label": "Serie medidor",  "tipo": "texto" },
+            { "id": "marca",  "label": "Marca medidor",  "tipo": "texto", "sugerencias": true },
+            { "id": "modelo", "label": "Modelo medidor", "tipo": "texto", "sugerencias": true }
+          ]
+        },
+        {
+          "id": "medidor_caracteristicas",
+          "titulo": "Características",
+          "campos": [
+            { "id": "clase_precision",    "label": "Clase de precisión",    "tipo": "texto" },
+            { "id": "constante_medicion", "label": "Constante de medición", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "medidor_capacidad",
+          "titulo": "Año y capacidad",
+          "campos": [
+            { "id": "anio_fabricacion",    "label": "Año de fabricación", "tipo": "entero", "min": 1950, "max": 2030 },
+            { "id": "capacidad_corriente", "label": "Capacidad de corriente del medidor", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "medidor_precintos_exist",
+          "titulo": "Precintos existentes",
+          "ayuda": "Los que encontraste al llegar.",
+          "campos": [
+            { "id": "precinto_exist_1", "label": "N° precinto existente 1", "tipo": "texto" },
+            { "id": "precinto_exist_2", "label": "N° precinto existente 2", "tipo": "texto" },
+            { "id": "precinto_exist_3", "label": "N° precinto existente 3", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "medidor_precintos_inst",
+          "titulo": "Precintos instalados",
+          "ayuda": "Los que dejaste puestos.",
+          "campos": [
+            { "id": "precinto_inst_1", "label": "N° precinto instalado 1", "tipo": "texto" },
+            { "id": "precinto_inst_2", "label": "N° precinto instalado 2", "tipo": "texto" },
+            { "id": "precinto_inst_3", "label": "N° precinto instalado 3", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "medidor_cajatoma",
+          "titulo": "Cajatoma",
+          "campos": [
+            { "id": "ubicacion_cajatoma", "label": "Ubicación de cajatoma", "tipo": "texto" },
+            { "id": "estado_cajatoma",    "label": "Estado de cajatoma",    "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "medidor_precintos_cajatoma",
+          "titulo": "Precintos de cajatoma",
+          "campos": [
+            { "id": "precinto_cajatoma_exist", "label": "Precinto de cajatoma EXISTENTE", "tipo": "texto" },
+            { "id": "precinto_cajatoma_inst",  "label": "Precinto de cajatoma INSTALADO", "tipo": "texto" }
+          ]
+        },
+        {
+          "id": "medidor_acometida",
+          "titulo": "Acometida",
+          "campos": [
+            { "id": "estado_acometida", "label": "Estado de acometida (cable control)", "tipo": "lista", "opciones": ["Malo", "Regular", "Bueno"] }
+          ]
+        },
+        {
+          "id": "medidor_fotos",
+          "titulo": "Fotos del sistema de medición",
+          "fotos": [
+            { "n": 1, "id": "foto_cajatoma",    "label": "Cajatoma" },
+            { "n": 2, "id": "foto_medidor",     "label": "Medidor" },
+            { "n": 3, "id": "foto_precintos",   "label": "Precintos" },
+            { "n": 4, "id": "foto_conexionado", "label": "Conexionado" },
+            { "n": 5, "id": "foto_acometida",   "label": "Acometida y cajatoma" },
+            { "n": 6, "id": "foto_mediciones",  "label": "Mediciones" },
+            { "n": 7, "id": "foto_7",           "label": "Foto 7 (sin nombre en el formato)" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "transformador",
+      "titulo": "TRANSFORMADOR",
+      "pasos": [
+        {
+          "id": "transformador_id",
+          "titulo": "Identificación",
+          "campos": [
+            { "id": "n_serie", "label": "N° de serie", "tipo": "texto" },
+            { "id": "marca",   "label": "Marca",       "tipo": "texto", "sugerencias": true },
+            { "id": "modelo",  "label": "Modelo",      "tipo": "texto", "sugerencias": true }
+          ]
+        },
+        {
+          "id": "transformador_caracteristicas",
+          "titulo": "Características",
+          "campos": [
+            { "id": "potencia",         "label": "Potencia (kVA)",     "tipo": "decimal", "comparar_con_gis": "potencia_kva" },
+            { "id": "anio_fabricacion", "label": "Año de fabricación", "tipo": "entero", "min": 1950, "max": 2030 }
+          ]
+        },
+        {
+          "id": "transformador_corrientes",
+          "titulo": "Corrientes por fase",
+          "ayuda": "Medidas con pinza amperimétrica en cada fase. Si es monofásico, solo la R.",
+          "campos": [
+            { "id": "corriente_r", "label": "Corriente fase R (A)", "tipo": "decimal" },
+            { "id": "corriente_s", "label": "Corriente fase S (A)", "tipo": "decimal" },
+            { "id": "corriente_t", "label": "Corriente fase T (A)", "tipo": "decimal" }
+          ]
+        },
+        {
+          "id": "transformador_fotos",
+          "titulo": "Fotos del transformador",
+          "fotos": [
+            { "n": 1, "id": "foto_conexiones",          "label": "Conexiones" },
+            { "n": 2, "id": "foto_placa_transformador", "label": "Placa de transformador" },
+            { "n": 3, "id": "foto_mediciones",          "label": "Mediciones" }
+          ]
+        }
+      ]
+    },
+
+    {
+      "id": "observaciones",
+      "titulo": "OBSERVACIONES",
+      "pasos": [
+        {
+          "id": "observaciones_final",
+          "titulo": "Observaciones",
+          "ayuda": "Cualquier cosa fuera de lo normal: acceso, estado, cliente ausente, etc.",
+          "campos": [
+            { "id": "observacion", "label": "Observaciones", "tipo": "texto_largo" }
+          ]
+        }
+      ]
+    }
+  ]
+}

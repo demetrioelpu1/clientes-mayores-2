@@ -2,7 +2,7 @@
    Los tiles del mapa NO se cachean aquí: eso lo maneja IndexedDB desde app.js/db.js,
    para poder gestionarlos como "recortes" independientes con nombre, borrado, etc. */
 
-const CACHE_NAME = 'catastro-app-shell-v3';
+const CACHE_NAME = 'catastro-app-shell-v9';
 const APP_SHELL = [
   './',
   './index.html',
@@ -20,6 +20,14 @@ const APP_SHELL = [
   './js/offline-tilelayer.js',
   './js/kmz.js',
   './js/network.js',
+  './js/campana.js',
+  './js/encuesta.js',
+  './js/xlsx.js',
+  './js/resultados.js',
+  // El catálogo es chico y hace falta siempre; los set-*.json se cachean solos
+  // la primera vez que se abre esa SET (el fetch de abajo es cache-first).
+  './data/catalogo.json',
+  './data/encuesta.json',
   './js/vendor/leaflet.js',
   './js/vendor/fflate.js',
   './icons/icon-192.png',
@@ -109,19 +117,40 @@ self.addEventListener('fetch', (event) => {
   // Los tiles de OSM/Esri son cross-origin y los maneja IndexedDB desde app.js.
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
 
+  /* El código de la app va NETWORK-FIRST y los datos CACHE-FIRST.
+
+     Con cache-first para todo, el celular seguía corriendo la versión anterior
+     hasta el segundo refresco: se publicaba una corrección y en campo no se
+     notaba. Ahora, habiendo señal, siempre se ejecuta la última versión
+     publicada; sin señal, se responde con lo cacheado y la app abre igual.
+
+     Los data/*.json no cambian entre versiones y pesan cientos de KB, así que
+     ahí sí conviene responder de la caché y refrescar por detrás. */
+  const esCodigo = /\.(html|js|css)$/.test(url.pathname)
+    || event.request.mode === 'navigate'
+    || url.pathname.endsWith('/');
+
+  const guardar = (resp) => {
+    if (resp && resp.ok) {
+      const clone = resp.clone();
+      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+    }
+    return resp;
+  };
+
+  if (esCodigo) {
+    event.respondWith(
+      fetch(event.request)
+        .then(guardar)
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((resp) => {
-          if (resp && resp.ok) {
-            const clone = resp.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return resp;
-        })
-        .catch(() => cached);
-      // cache-first: responde rápido con lo guardado si existe, y refresca en segundo plano
-      return cached || network;
+      const red = fetch(event.request).then(guardar).catch(() => cached);
+      return cached || red;
     })
   );
 });

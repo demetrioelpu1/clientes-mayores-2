@@ -324,3 +324,393 @@ html, body {
   margin-bottom: 10px; text-transform: uppercase;
 }
 .modal-hint { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 16px; }
+
+/* ---------- Fase 2: zona de trabajo (sistema › SET › alimentador › clientes) ---------- */
+.campana-migas {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: -6px 0 10px;
+  line-height: 1.5;
+}
+.campana-migas [data-volver] {
+  color: var(--accent-cyan);
+  cursor: pointer;
+}
+.campana-migas strong { color: var(--text); font-weight: 600; }
+
+.campana-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 4px;
+  border-bottom: 1px solid #2a2b32;
+  cursor: pointer;
+}
+.campana-fila:last-child { border-bottom: none; }
+.campana-fila.destacada {
+  background: #23242b;
+  border-radius: 10px;
+  padding-left: 10px;
+  padding-right: 10px;
+  margin-bottom: 6px;
+  border-bottom: none;
+}
+.campana-fila.sin-datos { opacity: 0.4; cursor: default; }
+.campana-info { flex: 1; min-width: 0; }
+.campana-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campana-detalle { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.campana-flecha { color: var(--text-dim); font-size: 18px; }
+.campana-vacio { font-size: 12px; color: var(--text-dim); padding: 18px 4px; text-align: center; }
+
+.estado-punto {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.estado-punto.pendiente { background: #d4af1f; }
+.estado-punto.borrador { background: var(--accent); }
+.estado-punto.completa { background: var(--green); }
+
+.etiqueta-dudoso {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--dark);
+  background: var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* ---------- Ficha de un cliente mayor ---------- */
+.cliente-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: -6px 0 12px;
+}
+.ficha-fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 7px 2px;
+  border-bottom: 1px solid #2a2b32;
+}
+.ficha-fila span { color: var(--text-dim); flex: 0 0 auto; }
+.ficha-fila strong { font-weight: 600; text-align: right; word-break: break-word; }
+.ficha-aviso {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dark);
+  background: var(--accent);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.cliente-acciones {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.cliente-acciones button { flex: 1; padding: 11px; }
+
+/* ---------- Panel semitransparente: deja ver el mapa detrás ----------
+   Solo el panel de zona de trabajo y la ficha; los demás quedan opacos
+   porque son formularios donde el fondo distrae. */
+#overlay-campana, #overlay-cliente { background: rgba(0,0,0,.28); }
+#overlay-campana .sheet, #overlay-cliente .sheet {
+  background: rgba(32, 33, 39, .82);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+.campana-fila.destacada { background: rgba(255,255,255,.07); }
+.campana-fila { border-bottom-color: rgba(255,255,255,.09); }
+.ficha-fila { border-bottom-color: rgba(255,255,255,.09); }
+
+/* ---------- Paso previo: quién está trabajando ---------- */
+.tecnico-caja { padding: 4px 0 2px; }
+.tecnico-caja p {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.tecnico-caja input {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  border-radius: 10px;
+  border: 1px solid #3a3b44;
+  background: #26272e;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.tecnico-caja input:focus { outline: none; border-color: var(--accent); }
+
+/* Nombre del técnico en la cabecera del panel */
+.campana-tecnico {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(255,255,255,.06);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+}
+.campana-tecnico strong { color: var(--text); font-weight: 600; }
+.campana-tecnico span[data-cambiar-tecnico] {
+  color: var(--accent-cyan);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+/* ---------- Fase 3: toma de datos, paso a paso ---------- */
+.sheet-alta { max-height: 92%; display: flex; flex-direction: column; }
+
+.paso-cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.paso-bloque {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  color: var(--accent);
+}
+.paso-num { font-size: 10.5px; color: var(--text-dim); white-space: nowrap; }
+
+.paso-barra {
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.10);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.paso-barra-relleno {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width .25s ease;
+}
+
+.paso-salto {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  border-radius: 8px;
+  border: 1px solid #3a3b44;
+  background: #26272e;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  font-family: inherit;
+}
+
+.paso-titulo { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.paso-ayuda {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+}
+.paso-titulo + .campo, .paso-ayuda + .campo, .paso-titulo + .foto-grilla { margin-top: 12px; }
+
+.paso-pie {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+.paso-pie button { flex: 1; padding: 14px; font-size: 15px; }
+.paso-pie #encuesta-atras { flex: 0 0 33%; }
+.paso-pie button:disabled { opacity: .35; }
+.paso-progreso {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 10px;
+}
+
+/* Ficha de lo que la app llena sola — no son campos editables */
+.auto-ficha {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin-top: 20px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(23,209,200,.07);
+  border: 1px solid rgba(23,209,200,.20);
+}
+.auto-ficha .ancho { grid-column: 1 / -1; }
+.auto-ficha span {
+  display: block;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-dim);
+}
+.auto-ficha strong { font-size: 12px; font-weight: 600; }
+.auto-ficha em { color: var(--text-dim); font-style: normal; font-size: 10.5px; }
+
+.campo { margin-bottom: 14px; }
+.campo label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+.campo label b { color: var(--accent); }
+.campo input,
+.campo select,
+.campo textarea {
+  width: 100%;
+  padding: 13px;
+  font-size: 16px;
+  border-radius: 9px;
+  border: 1px solid #3a3b44;
+  background: #26272e;
+  color: var(--text);
+  font-family: inherit;
+}
+.campo input:focus,
+.campo select:focus,
+.campo textarea:focus { outline: none; border-color: var(--accent); }
+
+/* ---------- Fotos ---------- */
+.foto-titulo {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 14px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.foto-grilla {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.foto-vista {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px dashed #4a4b55;
+  background: #26272e center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.foto.tomada .foto-vista { border-style: solid; border-color: var(--green); }
+.foto-numero {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.foto.tomada .foto-numero {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,.9);
+}
+.foto-label {
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: var(--text-dim);
+  margin-top: 4px;
+  text-align: center;
+}
+.foto.tomada .foto-label { color: var(--green); }
+
+/* ---------- Navegación táctil: flecha de Atrás en los paneles ----------
+   Las migas de pan son texto de 11 px: en un celular no se aciertan con el
+   pulgar. La flecha es el camino principal para volver; las migas quedan
+   como referencia de dónde estás. */
+.sheet h2 .h2-izq {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.sheet h2 .h2-izq > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-atras {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  margin: -8px 0 -8px -8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sheet-atras:active { background: rgba(255,255,255,.10); }
+.sheet-atras[hidden] { display: none; }
+
+/* El ✕ también necesita área de toque de verdad */
+.sheet h2 .close {
+  width: 40px;
+  height: 40px;
+  margin: -8px -8px -8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.sheet h2 .close:active { background: rgba(255,255,255,.10); }
+
+/* ---------- Fase 4: resultados ---------- */
+.res-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.res-tarjeta {
+  background: rgba(255,255,255,.06);
+  border-radius: 10px;
+  padding: 12px 6px;
+  text-align: center;
+}
+.res-num { font-size: 24px; font-weight: 700; line-height: 1.1; }
+.res-num.verde { color: var(--green); }
+.res-num.naranja { color: var(--accent); }
+.res-lbl {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-top: 2px;
+}
+.res-acciones {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.res-acciones button { flex: 1; padding: 13px; font-size: 14px; }
+.res-acciones button:disabled { opacity: .35; }

@@ -1,0 +1,659 @@
+{
+ "generado": "2026-08-13",
+ "sistemas": [
+  {
+   "nombre": "Juliaca",
+   "codigo": "SE0025",
+   "codigo_gis": "SE0025",
+   "sector_tipico": "2",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Juliaca",
+     "slug": "juliaca",
+     "alimentadores": [
+      {
+       "id": "5004",
+       "clientes": 13
+      },
+      {
+       "id": "5005",
+       "clientes": 2
+      },
+      {
+       "id": "5006",
+       "clientes": 0
+      },
+      {
+       "id": "5008",
+       "clientes": 4
+      },
+      {
+       "id": "5009",
+       "clientes": 7
+      }
+     ],
+     "disponible": true,
+     "archivo": "data/set-juliaca.json",
+     "kb": 511,
+     "clientes": 26,
+     "bbox": [
+      -70.1424297,
+      -15.4863069,
+      -70.1100048,
+      -15.4557752
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Puno",
+   "codigo": "SE0026",
+   "codigo_gis": "SE0026",
+   "sector_tipico": "2",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Puno",
+     "slug": "puno",
+     "alimentadores": [
+      {
+       "id": "0102"
+      },
+      {
+       "id": "0103"
+      },
+      {
+       "id": "0104"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "Azángaro",
+   "codigo": "SE0027",
+   "codigo_gis": "SE0027",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Azangaro",
+     "slug": "azangaro",
+     "alimentadores": [
+      {
+       "id": "8002"
+      },
+      {
+       "id": "8003"
+      },
+      {
+       "id": "8004"
+      }
+     ],
+     "disponible": false
+    },
+    {
+     "nombre": "Ananea",
+     "slug": "ananea",
+     "alimentadores": [
+      {
+       "id": "3001"
+      },
+      {
+       "id": "3002"
+      },
+      {
+       "id": "3003"
+      },
+      {
+       "id": "3004"
+      },
+      {
+       "id": "3005"
+      },
+      {
+       "id": "3006"
+      },
+      {
+       "id": "3007"
+      }
+     ],
+     "disponible": false
+    },
+    {
+     "nombre": "Chijisia",
+     "slug": "chijisia",
+     "alimentadores": [
+      {
+       "id": "7501"
+      },
+      {
+       "id": "7502"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "Antauta",
+   "codigo": "SE0028",
+   "codigo_gis": "SE0028",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Antauta",
+     "slug": "antauta",
+     "alimentadores": [
+      {
+       "id": "9001"
+      },
+      {
+       "id": "9002"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "Ayaviri",
+   "codigo": "SE0029",
+   "codigo_gis": "SE0029",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Ayaviri",
+     "slug": "ayaviri",
+     "alimentadores": [
+      {
+       "id": "6001"
+      },
+      {
+       "id": "6002"
+      },
+      {
+       "id": "6003"
+      },
+      {
+       "id": "6004"
+      },
+      {
+       "id": "6005"
+      },
+      {
+       "id": "6006"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "Ilave -Pomata",
+   "codigo": "SE0030",
+   "codigo_gis": "SE0030",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Ilave-Pomata",
+     "slug": "ilave-pomata",
+     "alimentadores": [
+      {
+       "id": "1001"
+      },
+      {
+       "id": "1002"
+      },
+      {
+       "id": "1003"
+      },
+      {
+       "id": "1004"
+      },
+      {
+       "id": "2001"
+      },
+      {
+       "id": "2002"
+      },
+      {
+       "id": "2003"
+      },
+      {
+       "id": "2004"
+      },
+      {
+       "id": "2005"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "San Gaban",
+   "codigo": "SE0220",
+   "codigo_gis": "SE0220",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "San Gaban",
+     "slug": "san-gaban",
+     "alimentadores": [
+      {
+       "id": "9501"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "Azángaro rural",
+   "codigo": "SE0237",
+   "codigo_gis": "SE0237",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Azangaro rural",
+     "slug": "azangaro-rural",
+     "alimentadores": [
+      {
+       "id": "8001"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "Juliaca-Rural",
+   "codigo": "SE0238",
+   "codigo_gis": "SE0238",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Juliaca rural",
+     "slug": "juliaca-rural",
+     "alimentadores": [
+      {
+       "id": "5007",
+       "clientes": 0
+      },
+      {
+       "id": "5010",
+       "clientes": 0
+      },
+      {
+       "id": "5011",
+       "clientes": 0
+      },
+      {
+       "id": "5021",
+       "clientes": 0
+      },
+      {
+       "id": "5022",
+       "clientes": 2
+      },
+      {
+       "id": "5023",
+       "clientes": 0
+      },
+      {
+       "id": "5024",
+       "clientes": 0
+      },
+      {
+       "id": "5025",
+       "clientes": 0
+      }
+     ],
+     "disponible": true,
+     "archivo": "data/set-juliaca-rural.json",
+     "kb": 46,
+     "clientes": 2,
+     "bbox": [
+      -70.1406577,
+      -15.456062,
+      -70.118621,
+      -15.4545329
+     ]
+    },
+    {
+     "nombre": "Huancane",
+     "slug": "huancane",
+     "alimentadores": [
+      {
+       "id": "4001"
+      },
+      {
+       "id": "4002"
+      },
+      {
+       "id": "4003"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "Puno baja densidad",
+   "codigo": "SE0239",
+   "codigo_gis": "SE0239",
+   "sector_tipico": "4",
+   "rural": false,
+   "sets": [
+    {
+     "nombre": "Puno baja densidad",
+     "slug": "puno-baja-densidad",
+     "alimentadores": [
+      {
+       "id": "0101"
+      },
+      {
+       "id": "0105"
+      },
+      {
+       "id": "0106"
+      }
+     ],
+     "disponible": false
+    },
+    {
+     "nombre": "Totorani",
+     "slug": "totorani",
+     "alimentadores": [
+      {
+       "id": "0201"
+      },
+      {
+       "id": "0202"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER JULIACA",
+   "codigo": "SR0124",
+   "codigo_gis": "SER001",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER JULIACA",
+     "slug": "ser-juliaca",
+     "alimentadores": [
+      {
+       "id": "5010"
+      },
+      {
+       "id": "5011"
+      },
+      {
+       "id": "5021"
+      },
+      {
+       "id": "5022"
+      },
+      {
+       "id": "5023"
+      },
+      {
+       "id": "5024"
+      },
+      {
+       "id": "5025"
+      },
+      {
+       "id": "4001"
+      },
+      {
+       "id": "4003"
+      },
+      {
+       "id": "5009"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER PUNO",
+   "codigo": "SR0125",
+   "codigo_gis": "SER002",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER PUNO",
+     "slug": "ser-puno",
+     "alimentadores": [
+      {
+       "id": "0201"
+      },
+      {
+       "id": "0202"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER AZANGARO",
+   "codigo": "SR0122",
+   "codigo_gis": "SER003",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER AZANGARO",
+     "slug": "ser-azangaro",
+     "alimentadores": [
+      {
+       "id": "8001"
+      },
+      {
+       "id": "8002"
+      },
+      {
+       "id": "3002"
+      },
+      {
+       "id": "3003"
+      },
+      {
+       "id": "7501"
+      },
+      {
+       "id": "7502"
+      },
+      {
+       "id": "8003"
+      },
+      {
+       "id": "8004"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER AYAVIRI",
+   "codigo": "SR0123",
+   "codigo_gis": "SER004",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER AYAVIRI",
+     "slug": "ser-ayaviri",
+     "alimentadores": [
+      {
+       "id": "6001"
+      },
+      {
+       "id": "6002"
+      },
+      {
+       "id": "6003"
+      },
+      {
+       "id": "6004"
+      },
+      {
+       "id": "6005"
+      },
+      {
+       "id": "6006"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER ILAVE (POMATA)",
+   "codigo": "SR0121",
+   "codigo_gis": "SER005",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER ILAVE (POMATA)",
+     "slug": "ser-ilave-pomata",
+     "alimentadores": [
+      {
+       "id": "1001"
+      },
+      {
+       "id": "1002"
+      },
+      {
+       "id": "1003"
+      },
+      {
+       "id": "1004"
+      },
+      {
+       "id": "2001"
+      },
+      {
+       "id": "2002"
+      },
+      {
+       "id": "2003"
+      },
+      {
+       "id": "2004"
+      },
+      {
+       "id": "2005"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER ANTAUTA",
+   "codigo": "SR0135",
+   "codigo_gis": "SER006",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER ANTAUTA",
+     "slug": "ser-antauta",
+     "alimentadores": [
+      {
+       "id": "9001"
+      },
+      {
+       "id": "9002"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER SAN GABAN",
+   "codigo": "SR0292",
+   "codigo_gis": "SER007",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER SAN GABAN",
+     "slug": "ser-san-gaban",
+     "alimentadores": [
+      {
+       "id": "9501"
+      },
+      {
+       "id": "9601"
+      },
+      {
+       "id": "9602"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER  AMANTANI",
+   "codigo": "SR2059",
+   "codigo_gis": "SER008",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER  AMANTANI",
+     "slug": "ser-amantani",
+     "alimentadores": [
+      {
+       "id": "1501"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  },
+  {
+   "nombre": "SER  TAQUILE",
+   "codigo": "SR0297",
+   "codigo_gis": "SER009",
+   "sector_tipico": "SER",
+   "rural": true,
+   "sets": [
+    {
+     "nombre": "SER  TAQUILE",
+     "slug": "ser-taquile",
+     "alimentadores": [
+      {
+       "id": "1601"
+      }
+     ],
+     "disponible": false
+    }
+   ]
+  }
+ ]
+}
