@@ -123,33 +123,33 @@
           "titulo": "Identificación",
           "ayuda": "Se leen de la placa del trafomix.",
           "campos": [
-            { "id": "serie",  "label": "Serie",  "tipo": "texto" },
-            { "id": "marca",  "label": "Marca",  "tipo": "texto", "sugerencias": true },
-            { "id": "modelo", "label": "Modelo", "tipo": "texto", "sugerencias": true }
+            { "id": "serie",  "label": "Serie",  "tipo": "texto", "gis": "serie" },
+            { "id": "marca",  "label": "Marca",  "tipo": "texto", "sugerencias": true, "gis": "marca" },
+            { "id": "modelo", "label": "Modelo", "tipo": "texto", "sugerencias": true, "gis": "modelo" }
           ]
         },
         {
           "id": "trafomix_relaciones",
           "titulo": "Relaciones",
           "campos": [
-            { "id": "relacion_tension",   "label": "Relación de tensión",   "tipo": "texto", "placeholder": "10000/100" },
-            { "id": "relacion_corriente", "label": "Relación de corriente", "tipo": "texto", "placeholder": "50/5" }
+            { "id": "relacion_tension",   "label": "Relación de tensión", "gis": "relacion_tension",   "tipo": "texto", "placeholder": "10000/100" },
+            { "id": "relacion_corriente", "label": "Relación de corriente", "gis": "relacion_corriente", "tipo": "texto", "placeholder": "50/5" }
           ]
         },
         {
           "id": "trafomix_caracteristicas",
           "titulo": "Características",
           "campos": [
-            { "id": "clase_precision",  "label": "Clase de precisión", "tipo": "texto" },
-            { "id": "anio_fabricacion", "label": "Año de fabricación", "tipo": "entero", "min": 1950, "max": 2030 }
+            { "id": "clase_precision",  "label": "Clase de precisión", "gis": "precision_tension", "tipo": "texto" },
+            { "id": "anio_fabricacion", "label": "Año de fabricación", "gis": "anio_fabricacion", "tipo": "entero", "min": 1950, "max": 2030 }
           ]
         },
         {
           "id": "trafomix_potencias",
           "titulo": "Potencias",
           "campos": [
-            { "id": "potencia_tension",   "label": "Potencia en tensión",   "tipo": "texto" },
-            { "id": "potencia_corriente", "label": "Potencia en corriente", "tipo": "texto" }
+            { "id": "potencia_tension",   "label": "Potencia en tensión", "gis": "potencia_tension",   "tipo": "texto" },
+            { "id": "potencia_corriente", "label": "Potencia en corriente", "gis": "potencia_corriente", "tipo": "texto" }
           ]
         },
         {

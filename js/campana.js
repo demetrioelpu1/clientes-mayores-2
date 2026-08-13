@@ -2,9 +2,13 @@
 
    Cascada:  SISTEMA ELÉCTRICO → SET → ALIMENTADOR → clientes mayores
 
-   Los datos salen de archivos preparados en la PC (data/catalogo.json y
-   data/set-<slug>.json). El celular nunca lee un KMZ: eso ya se convirtió
-   antes con tools/build_app_data.py. */
+   Los datos de cada alimentador se cargan desde sus KMZ (Tramos MT, Trafomix,
+   SED), que el ingeniero manda por Drive o WhatsApp. Cada carga queda con su
+   fecha y no pisa a la anterior: en campo hay que poder saber contra qué
+   versión del GIS se está comparando.
+
+   Si existe un paquete precompilado en data/set-<slug>.json se usa como
+   respaldo mientras no haya KMZ cargados para esa zona. */
 
 const Campana = (() => {
   'use strict';
@@ -13,21 +17,32 @@ const Campana = (() => {
   const CLAVE_ALIM = 'catastro:campana:alimentador';
   const CLAVE_TECNICO = 'catastro:tecnico';
 
+  const CAPAS = ['tramos_mt', 'trafomix', 'sed'];
+  const NOMBRE_CAPA = {
+    tramos_mt: 'Tramos MT',
+    trafomix: 'Trafomix',
+    sed: 'SED',
+  };
+
   const COLOR = {
     tramos_mt: '#e0553b',
-    postes_mt: '#e0553b',
-    sed_publicas: '#7a8290',
+    sed: '#7a8290',
     pendiente: '#d4af1f',
     borrador: '#f5822a',
     completa: '#3fa85f',
   };
 
   let catalogo = null;
-  let paquete = null;          // paquete de la SET activa
-  let alimentador = null;      // código del alimentador activo, o null = todos
-  let grupos = {};             // capas Leaflet de la red
+  let precompilado = null;     // data/set-<slug>.json, si existe
+  let setActual = null;        // { slug, nombre, sistema }
+  let alimentador = null;
+  let capas = {};              // capa -> [features]
+  let clientes = [];
+  let estados = {};
+  let grupos = {};
   let grupoClientes = null;
-  let marcadores = {};         // código SED -> marcador
+  let marcadores = {};
+  let capaCargando = null;     // capa que espera el archivo del selector
 
   const $ = (sel) => document.querySelector(sel);
   const map = () => AppBridge.map;
@@ -42,12 +57,6 @@ const Campana = (() => {
     return catalogo;
   }
 
-  async function cargarPaquete(slug) {
-    const res = await fetch(`data/set-${slug}.json`);
-    if (!res.ok) throw new Error(`No hay datos descargados para esta SET`);
-    return res.json();
-  }
-
   function buscarSet(slug) {
     for (const sis of catalogo.sistemas) {
       const s = sis.sets.find((x) => x.slug === slug);
@@ -56,24 +65,78 @@ const Campana = (() => {
     return null;
   }
 
-  /* Clientes visibles según el alimentador elegido. */
-  function clientesVisibles() {
-    if (!paquete) return [];
-    if (!alimentador) return paquete.clientes;
-    return paquete.clientes.filter((c) => c.alimentador === alimentador);
+  function zonaActual() {
+    return MapDB.zonaKey(setActual.slug, alimentador);
   }
 
-  /* ------------------------------------------------- estado de cada encuesta
+  /* Arma las capas de la zona: manda lo cargado desde KMZ; si no hay nada, se
+     usa el paquete precompilado (hoy solo existe para Juliaca). */
+  async function cargarCapasDeZona() {
+    const paquetes = await MapDB.getPaquetesDeZona(zonaActual());
+    capas = {};
+    CAPAS.forEach((c) => {
+      const activa = paquetes.find((p) => p.capa === c && p.activa);
+      capas[c] = activa ? activa.elementos : desdePrecompilado(c);
+    });
+    clientes = construirClientes();
+  }
 
-     pendiente = ni empezada · borrador = empezada · completa = todo lleno.
-     Se lee una sola vez de IndexedDB y se guarda en memoria: la lista y los
-     marcadores se pintan sin esperar al disco. */
+  function desdePrecompilado(capa) {
+    if (!precompilado) return [];
+    const equivalencias = { tramos_mt: 'tramos_mt', sed: 'sed_publicas' };
+    const fc = (precompilado.capas || {})[equivalencias[capa]];
+    if (!fc) return [];
+    return fc.features.filter((f) => !alimentador || f.properties.alimentador === alimentador);
+  }
 
-  let estados = {};
+  function coordsDe(feature) {
+    const g = feature.geometry;
+    if (!g) return null;
+    if (g.type === 'Point') return { lon: g.coordinates[0], lat: g.coordinates[1] };
+    return null;
+  }
+
+  /* La unidad de trabajo es el TRAFOMIX: es el punto de medición del cliente
+     mayor, y en los KMZ de Ananea todos vienen con propietario = Tercero.
+     Si esa capa no está cargada se cae al criterio viejo (SED de terceros),
+     que es lo que había en la muestra de Juliaca. */
+  function construirClientes() {
+    if (capas.trafomix && capas.trafomix.length) {
+      const nombres = {};
+      (capas.sed || []).forEach((f) => {
+        if (f.properties.sed) nombres[f.properties.sed] = f.properties.nombre || '';
+      });
+      return capas.trafomix.map((f) => {
+        const p = f.properties;
+        const c = coordsDe(f) || {};
+        return {
+          sed: p.trafomix || p.sed || p.estructura,   // clave estable de la toma de datos
+          tipo: 'trafomix',
+          etiqueta: p.trafomix || '',
+          nombre: nombres[p.sed] || p.sed_etiqueta || p.sed || '',
+          alimentador: p.alimentador || alimentador,
+          sistema: p.sistema || '',
+          potencia_kva: p.potencia_tension || '',
+          lat: c.lat,
+          lon: c.lon,
+          gis: p,                                     // referencia para el formulario
+        };
+      }).filter((c) => c.lat !== undefined);
+    }
+
+    if (precompilado && precompilado.clientes) {
+      return precompilado.clientes
+        .filter((c) => !alimentador || c.alimentador === alimentador)
+        .map((c) => Object.assign({ tipo: 'sed', gis: null }, c));
+    }
+    return [];
+  }
+
+  /* ------------------------------------------------- estado de cada toma de datos */
 
   async function refrescarEstados() {
     estados = await MapDB.getEstadosEncuestas();
-    if (paquete) {
+    if (setActual && alimentador) {
       redibujar();
       actualizarSubtitulo();
     }
@@ -84,8 +147,7 @@ const Campana = (() => {
   }
 
   function resumenAvance(lista) {
-    const hechos = lista.filter((c) => estadoDe(c) === 'completa').length;
-    return { hechos, total: lista.length };
+    return { hechos: lista.filter((c) => estadoDe(c) === 'completa').length, total: lista.length };
   }
 
   /* ------------------------------------------------------------------- mapa */
@@ -98,98 +160,60 @@ const Campana = (() => {
     marcadores = {};
   }
 
-  function dibujarRed() {
-    const capas = paquete.capas || {};
-
-    if (capas.tramos_mt) {
-      grupos.tramos_mt = L.geoJSON(filtrarPorAlimentador(capas.tramos_mt), {
-        style: { color: COLOR.tramos_mt, weight: 3, opacity: 0.85 },
-        onEachFeature: (f, capa) => {
-          const p = f.properties;
-          capa.bindTooltip(`Tramo MT ${p.tramo || ''} · ${p.tension_kv || '—'} kV`, { direction: 'top' });
-        },
-      }).addTo(map());
-    }
-
-    if (capas.postes_mt) {
-      grupos.postes_mt = L.geoJSON(filtrarPorAlimentador(capas.postes_mt), {
-        pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-          radius: 3, weight: 1, color: '#ffffff', fillColor: COLOR.postes_mt, fillOpacity: 0.9,
-        }),
-        onEachFeature: (f, capa) => {
-          capa.bindTooltip(`Poste MT ${f.properties.estructura || ''}`, { direction: 'top' });
-        },
-      }).addTo(map());
-    }
-
-    if (capas.sed_publicas) {
-      grupos.sed_publicas = L.geoJSON(filtrarPorAlimentador(capas.sed_publicas), {
-        pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-          radius: 4, weight: 1, color: '#ffffff', fillColor: COLOR.sed_publicas, fillOpacity: 0.85,
-        }),
-        onEachFeature: (f, capa) => {
-          const p = f.properties;
-          capa.bindTooltip(`SED ${p.etiqueta || p.sed} · ${p.potencia_kva || '—'} kVA (Electro Puno)`, { direction: 'top' });
-        },
-      }).addTo(map());
-    }
-  }
-
-  function filtrarPorAlimentador(fc) {
-    if (!alimentador) return fc;
-    return {
-      type: 'FeatureCollection',
-      features: fc.features.filter((f) => f.properties.alimentador === alimentador),
-    };
-  }
-
-  function dibujarClientes() {
-    grupoClientes = L.layerGroup().addTo(map());
-    clientesVisibles().forEach((c) => {
-      const estado = estadoDe(c);
-      const m = L.circleMarker([c.lat, c.lon], {
-        radius: 9,
-        weight: 3,
-        color: '#ffffff',
-        fillColor: COLOR[estado],
-        fillOpacity: 1,
-      });
-      m.bindTooltip(`${c.etiqueta || c.sed} · ${c.nombre || ''}`, { direction: 'top' });
-      m.on('click', () => abrirFicha(c.sed));
-      m.addTo(grupoClientes);
-      marcadores[c.sed] = m;
-    });
+  function fc(features) {
+    return { type: 'FeatureCollection', features };
   }
 
   function redibujar() {
     limpiarMapa();
-    if (!paquete) return;
-    dibujarRed();
-    dibujarClientes();
+
+    if ((capas.tramos_mt || []).length) {
+      grupos.tramos_mt = L.geoJSON(fc(capas.tramos_mt), {
+        style: { color: COLOR.tramos_mt, weight: 3, opacity: 0.85 },
+        onEachFeature: (f, capa) =>
+          capa.bindTooltip(`Tramo MT ${f.properties.tramo || ''} · ${f.properties.tension_kv || '—'} kV`,
+            { direction: 'top' }),
+      }).addTo(map());
+    }
+
+    if ((capas.sed || []).length) {
+      grupos.sed = L.geoJSON(fc(capas.sed), {
+        pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+          radius: 4, weight: 1, color: '#ffffff', fillColor: COLOR.sed, fillOpacity: 0.85,
+        }),
+        onEachFeature: (f, capa) => {
+          const p = f.properties;
+          capa.bindTooltip(`SED ${p.etiqueta || p.sed || ''} · ${p.potencia_kva || '—'} kVA`,
+            { direction: 'top' });
+        },
+      }).addTo(map());
+    }
+
+    grupoClientes = L.layerGroup().addTo(map());
+    clientes.forEach((c) => {
+      const m = L.circleMarker([c.lat, c.lon], {
+        radius: 9, weight: 3, color: '#ffffff',
+        fillColor: COLOR[estadoDe(c)], fillOpacity: 1,
+      });
+      m.bindTooltip(`${c.etiqueta || c.sed}${c.nombre ? ' · ' + c.nombre : ''}`, { direction: 'top' });
+      m.on('click', () => abrirFicha(c.sed));
+      m.addTo(grupoClientes);
+      marcadores[c.sed] = m;
+    });
+
     encuadrar();
   }
 
   function encuadrar() {
-    const lista = clientesVisibles();
-    if (!lista.length) return;
-    const bounds = L.latLngBounds(lista.map((c) => [c.lat, c.lon]));
-    map().fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    if (clientes.length) {
+      map().fitBounds(L.latLngBounds(clientes.map((c) => [c.lat, c.lon])),
+        { padding: [40, 40], maxZoom: 16 });
+      return;
+    }
+    if (grupos.tramos_mt) map().fitBounds(grupos.tramos_mt.getBounds(), { padding: [40, 40] });
   }
 
-  function irACliente(cliente) {
-    map().setView([cliente.lat, cliente.lon], 18);
-    const m = marcadores[cliente.sed];
-    if (m) m.openTooltip();
-  }
-
-  /* --------------------------------------------------------------- selector */
-
-  /* ------------------------------------------------------- pila de pantallas
-
-     En celular no alcanza con las migas de pan (texto de 11 px): hace falta
-     una flecha de Atrás con área de toque real y que el botón físico de
-     Android haga lo mismo. Cada pantalla es una función que sabe dibujarse,
-     así volver es simplemente llamar a la anterior. */
+  /* ------------------------------------------------------- pila de pantallas */
 
   let pila = [];
   let vistaActual = null;
@@ -199,12 +223,7 @@ const Campana = (() => {
     vistaActual = fn;
     fn();
   }
-
-  function reemplazar(fn) {
-    vistaActual = fn;
-    fn();
-  }
-
+  function reemplazar(fn) { vistaActual = fn; fn(); }
   function atras() {
     const anterior = pila.pop();
     if (!anterior) return false;
@@ -212,12 +231,11 @@ const Campana = (() => {
     anterior();
     return true;
   }
+  function refrescarVista() { if (vistaActual) vistaActual(); }
 
   function abrirSelector() {
     pila = [];
     vistaActual = null;
-    // Antes de elegir la zona hay que saber quién está trabajando: ese nombre
-    // va en cada toma de datos (bloque CLIENTE del formato de campo).
     ir(getTecnico() ? renderSistemas : renderTecnico);
     AppBridge.openSheet('#overlay-campana');
   }
@@ -232,15 +250,12 @@ const Campana = (() => {
 
   /* ------------------------------------------------------------- técnico */
 
-  function getTecnico() {
-    return localStorage.getItem(CLAVE_TECNICO) || '';
-  }
+  function getTecnico() { return localStorage.getItem(CLAVE_TECNICO) || ''; }
 
   function barraTecnico() {
     const nombre = getTecnico();
     if (!nombre) return '';
-    return `
-      <div class="campana-tecnico">
+    return `<div class="campana-tecnico">
         <div>Técnico: <strong>${nombre}</strong></div>
         <span data-cambiar-tecnico>Cambiar</span>
       </div>`;
@@ -259,7 +274,7 @@ const Campana = (() => {
     $('#campana-cuerpo').innerHTML = `
       <div class="tecnico-caja">
         <p>Escribe tu nombre completo. Queda guardado en este celular y se
-           agrega solo a cada encuesta que registres.</p>
+           agrega solo a cada toma de datos que registres.</p>
         <input type="text" id="tecnico-input" placeholder="Ej: Juan Pérez Quispe"
                autocomplete="name" value="${nombre}" />
         <button class="btn-primary" id="tecnico-btn" style="width:100%; padding:12px;">Continuar</button>
@@ -268,12 +283,8 @@ const Campana = (() => {
     const input = $('#tecnico-input');
     const guardar = () => {
       const valor = input.value.trim();
-      if (valor.length < 3) {
-        AppBridge.showToast('Escribe tu nombre para continuar');
-        return;
-      }
+      if (valor.length < 3) { AppBridge.showToast('Escribe tu nombre para continuar'); return; }
       localStorage.setItem(CLAVE_TECNICO, valor);
-      // Si vino de "Cambiar", vuelve a donde estaba; si es el arranque, sigue.
       if (!atras()) reemplazar(renderSistemas);
     };
     $('#tecnico-btn').addEventListener('click', guardar);
@@ -281,17 +292,29 @@ const Campana = (() => {
     setTimeout(() => input.focus(), 60);
   }
 
-  function renderSistemas() {
+  /* --------------------------------------------------------- sistemas y SET */
+
+  async function contarCargas() {
+    const todos = await MapDB.getTodosLosPaquetes();
+    const porSet = {};
+    todos.filter((p) => p.activa).forEach((p) => {
+      porSet[p.setSlug] = porSet[p.setSlug] || new Set();
+      porSet[p.setSlug].add(p.alimentador);
+    });
+    return porSet;
+  }
+
+  async function renderSistemas() {
+    const cargas = await contarCargas();
     const filas = catalogo.sistemas
       .filter((s) => !s.rural)
       .map((s) => {
-        const conDatos = s.sets.filter((x) => x.disponible).length;
-        const clientes = s.sets.reduce((a, x) => a + (x.clientes || 0), 0);
+        const conDatos = s.sets.filter((x) => x.disponible || cargas[x.slug]).length;
         const detalle = conDatos
-          ? `${clientes} cliente(s) mayor(es)`
-          : 'sin datos — falta el KMZ';
+          ? `${conDatos} SET con datos`
+          : 'sin datos — cargar KMZ';
         return `
-          <div class="campana-fila ${conDatos ? '' : 'sin-datos'}" data-sistema="${s.codigo}">
+          <div class="campana-fila" data-sistema="${s.codigo}">
             <div class="campana-info">
               <div class="campana-nombre">${s.nombre}</div>
               <div class="campana-detalle">${s.sets.length} SET · ${detalle}</div>
@@ -302,7 +325,6 @@ const Campana = (() => {
       .join('');
 
     pintar('Sistema eléctrico', '', filas);
-
     $('#campana-cuerpo').querySelectorAll('[data-sistema]').forEach((el) => {
       el.addEventListener('click', () => elegirSistema(el.dataset.sistema));
     });
@@ -311,34 +333,29 @@ const Campana = (() => {
   function elegirSistema(codigo) {
     const sis = catalogo.sistemas.find((s) => s.codigo === codigo);
     if (!sis) return;
-    // Si el sistema tiene una sola SET, no tiene sentido preguntar: se salta.
-    if (sis.sets.length === 1) {
-      elegirSet(sis.sets[0].slug);
-      return;
-    }
+    if (sis.sets.length === 1) { elegirSet(sis.sets[0].slug); return; }
     ir(() => renderSets(sis));
   }
 
-  function renderSets(sis) {
-    const filas = sis.sets
-      .map((s) => {
-        const detalle = s.disponible
-          ? `${s.clientes} cliente(s) mayor(es) · ${s.kb} KB`
-          : 'sin datos — falta el KMZ';
-        return `
-          <div class="campana-fila ${s.disponible ? '' : 'sin-datos'}" data-set="${s.slug}">
-            <div class="campana-info">
-              <div class="campana-nombre">SET ${s.nombre}</div>
-              <div class="campana-detalle">${s.alimentadores.length} alimentadores · ${detalle}</div>
-            </div>
-            <div class="campana-flecha">›</div>
-          </div>`;
-      })
-      .join('');
+  async function renderSets(sis) {
+    const cargas = await contarCargas();
+    const filas = sis.sets.map((s) => {
+      const n = cargas[s.slug] ? cargas[s.slug].size : 0;
+      const detalle = n ? `${n} alimentador(es) con datos cargados`
+        : (s.disponible ? 'paquete precompilado' : 'sin datos — cargar KMZ');
+      return `
+        <div class="campana-fila" data-set="${s.slug}">
+          <div class="campana-info">
+            <div class="campana-nombre">SET ${s.nombre}</div>
+            <div class="campana-detalle">${s.alimentadores.length} alimentadores · ${detalle}</div>
+          </div>
+          <div class="campana-flecha">›</div>
+        </div>`;
+    }).join('');
 
-    pintar('Subestación (SET)', `<span data-volver="sistemas">Sistemas</span> › <strong>${sis.nombre}</strong>`, filas);
+    pintar('Subestación (SET)',
+      `<span data-volver="sistemas">Sistemas</span> › <strong>${sis.nombre}</strong>`, filas);
     conectarMigas();
-
     $('#campana-cuerpo').querySelectorAll('[data-set]').forEach((el) => {
       el.addEventListener('click', () => elegirSet(el.dataset.set));
     });
@@ -347,133 +364,295 @@ const Campana = (() => {
   async function elegirSet(slug) {
     const encontrado = buscarSet(slug);
     if (!encontrado) return;
-    if (!encontrado.set.disponible) {
-      AppBridge.showToast('Esta SET todavía no tiene datos cargados', 2800);
-      return;
+    setActual = { slug, nombre: encontrado.set.nombre, sistema: encontrado.sistema };
+
+    // El precompilado es opcional: si no existe, se trabaja solo con los KMZ.
+    precompilado = null;
+    if (encontrado.set.disponible) {
+      try { precompilado = await (await fetch(`data/set-${slug}.json`)).json(); }
+      catch (e) { precompilado = null; }
     }
-    try {
-      paquete = await cargarPaquete(slug);
-    } catch (e) {
-      AppBridge.showToast(e.message, 3000);
-      return;
-    }
+
     alimentador = null;
     localStorage.setItem(CLAVE_SET, slug);
     localStorage.removeItem(CLAVE_ALIM);
-    actualizarSubtitulo();
-    redibujar();
     ir(renderAlimentadores);
   }
 
-  function renderAlimentadores() {
-    const encontrado = buscarSet(paquete.slug);
+  /* ----------------------------------------------------------- alimentadores */
+
+  async function renderAlimentadores() {
+    const encontrado = buscarSet(setActual.slug);
     const set = encontrado.set;
     const sis = encontrado.sistema;
+    const paquetes = await MapDB.getTodosLosPaquetes();
 
-    const todos = resumenAvance(paquete.clientes);
-    const filas = set.alimentadores
-      .map((a) => {
-        const lista = paquete.clientes.filter((c) => c.alimentador === a.id);
-        const { hechos, total } = resumenAvance(lista);
-        if (!total) {
-          return `
-            <div class="campana-fila sin-datos">
-              <div class="campana-info">
-                <div class="campana-nombre">Alimentador ${a.id}</div>
-                <div class="campana-detalle">sin clientes mayores</div>
-              </div>
-            </div>`;
-        }
-        return `
-          <div class="campana-fila" data-alim="${a.id}">
-            <div class="campana-info">
-              <div class="campana-nombre">Alimentador ${a.id}</div>
-              <div class="campana-detalle">${total} cliente(s) mayor(es) · ${hechos} hecho(s)</div>
-            </div>
-            <div class="campana-flecha">›</div>
-          </div>`;
-      })
-      .join('');
+    const filas = set.alimentadores.map((a) => {
+      const zona = MapDB.zonaKey(setActual.slug, a.id);
+      const activos = paquetes.filter((p) => p.zona === zona && p.activa);
+      const capasOk = CAPAS.filter((c) => activos.some((p) => p.capa === c));
+      const trafomix = activos.find((p) => p.capa === 'trafomix');
+
+      let detalle;
+      if (capasOk.length) {
+        detalle = capasOk.map((c) => NOMBRE_CAPA[c]).join(' · ');
+        if (trafomix) detalle += ` — ${trafomix.total} clientes mayores`;
+      } else if (precompilado) {
+        const n = (precompilado.clientes || []).filter((c) => c.alimentador === a.id).length;
+        detalle = n ? `${n} clientes mayores (paquete precompilado)` : 'sin clientes mayores';
+      } else {
+        detalle = 'sin datos — cargar KMZ';
+      }
+
+      return `
+        <div class="campana-fila" data-alim="${a.id}">
+          <div class="campana-info">
+            <div class="campana-nombre">Alimentador ${a.id}</div>
+            <div class="campana-detalle">${detalle}</div>
+          </div>
+          <div class="campana-flecha">›</div>
+        </div>`;
+    }).join('');
 
     const migas = sis.sets.length > 1
       ? `<span data-volver="sistemas">Sistemas</span> › <span data-volver="sets" data-codigo="${sis.codigo}">${sis.nombre}</span> › <strong>SET ${set.nombre}</strong>`
       : `<span data-volver="sistemas">Sistemas</span> › <strong>SET ${set.nombre}</strong>`;
 
-    const todosFila = `
-      <div class="campana-fila destacada" data-alim="">
-        <div class="campana-info">
-          <div class="campana-nombre">Toda la SET</div>
-          <div class="campana-detalle">${todos.total} cliente(s) mayor(es) · ${todos.hechos} hecho(s)</div>
-        </div>
-        <div class="campana-flecha">›</div>
-      </div>`;
-
-    pintar('Alimentador', migas, todosFila + filas);
+    pintar('Alimentador', migas, filas);
     conectarMigas();
-
     $('#campana-cuerpo').querySelectorAll('[data-alim]').forEach((el) => {
-      el.addEventListener('click', () => elegirAlimentador(el.dataset.alim || null));
+      el.addEventListener('click', () => elegirAlimentador(el.dataset.alim));
     });
   }
 
-  function elegirAlimentador(id) {
+  async function elegirAlimentador(id) {
     alimentador = id;
-    if (id) localStorage.setItem(CLAVE_ALIM, id);
-    else localStorage.removeItem(CLAVE_ALIM);
+    localStorage.setItem(CLAVE_ALIM, id);
+    await cargarCapasDeZona();
     actualizarSubtitulo();
     redibujar();
     ir(renderClientes);
   }
 
-  function renderClientes() {
-    const lista = clientesVisibles();
-    const encontrado = buscarSet(paquete.slug);
-    const { hechos, total } = resumenAvance(lista);
+  /* --------------------------------------------------------------- clientes */
 
-    const filas = lista
-      .map((c) => {
-        const estado = estadoDe(c);
-        return `
-          <div class="campana-fila cliente" data-cliente="${c.sed}">
-            <div class="estado-punto ${estado}"></div>
-            <div class="campana-info">
-              <div class="campana-nombre">${c.nombre || '(sin nombre)'} ${c.dudoso ? '<span class="etiqueta-dudoso">verificar</span>' : ''}</div>
-              <div class="campana-detalle">${c.etiqueta || c.sed} · Alim. ${c.alimentador} · ${c.potencia_kva || '—'} kVA</div>
-            </div>
-            <div class="campana-flecha">›</div>
-          </div>`;
-      })
-      .join('');
+  async function renderClientes() {
+    const paquetes = await MapDB.getPaquetesDeZona(zonaActual());
+    const { hechos, total } = resumenAvance(clientes);
 
-    const migas = `<span data-volver="sistemas">Sistemas</span> › <span data-volver="alimentadores">SET ${encontrado.set.nombre}</span> › <strong>${alimentador ? 'Alim. ' + alimentador : 'Toda la SET'}</strong>`;
+    const tira = CAPAS.map((c) => {
+      const activa = paquetes.find((p) => p.capa === c && p.activa);
+      const n = (capas[c] || []).length;
+      const clase = activa ? 'ok' : (n ? 'respaldo' : 'falta');
+      const detalle = activa ? `${activa.total}` : (n ? `${n}` : 'sin archivo');
+      return `<div class="capa-chip ${clase}" data-capa="${c}">
+          <div class="capa-nombre">${NOMBRE_CAPA[c]}</div>
+          <div class="capa-detalle">${detalle}</div>
+        </div>`;
+    }).join('');
 
-    pintar(
-      `Clientes mayores (${hechos}/${total})`,
-      migas,
-      filas || '<div class="campana-vacio">No hay clientes mayores en este alimentador.</div>'
-    );
+    const filas = clientes.map((c) => {
+      const estado = estadoDe(c);
+      return `
+        <div class="campana-fila cliente" data-cliente="${c.sed}">
+          <div class="estado-punto ${estado}"></div>
+          <div class="campana-info">
+            <div class="campana-nombre">${c.nombre || c.etiqueta || '(sin nombre)'}</div>
+            <div class="campana-detalle">${c.etiqueta || c.sed}${c.potencia_kva ? ' · ' + c.potencia_kva : ''}</div>
+          </div>
+          <div class="campana-flecha">›</div>
+        </div>`;
+    }).join('');
+
+    const encontrado = buscarSet(setActual.slug);
+    const migas = `<span data-volver="sistemas">Sistemas</span> › <span data-volver="alimentadores">SET ${encontrado.set.nombre}</span> › <strong>Alim. ${alimentador}</strong>`;
+
+    pintar(`Clientes mayores (${hechos}/${total})`, migas, `
+      <div class="capa-tira">${tira}</div>
+      <button class="btn-secondary" id="btn-cargar-kmz" style="width:100%; margin-bottom:14px;">⬆ Cargar KMZ de este alimentador</button>
+      ${filas || '<div class="campana-vacio">No hay clientes mayores cargados en este alimentador.</div>'}`);
     conectarMigas();
 
+    $('#btn-cargar-kmz').addEventListener('click', () => pedirArchivos(null));
+    $('#campana-cuerpo').querySelectorAll('[data-capa]').forEach((el) => {
+      el.addEventListener('click', () => ir(() => renderCargas(el.dataset.capa)));
+    });
     $('#campana-cuerpo').querySelectorAll('[data-cliente]').forEach((el) => {
       el.addEventListener('click', () => abrirFicha(el.dataset.cliente));
     });
   }
 
-  /* Las migas saltan varios niveles de una vez, así que rearman la pila para
-     que la flecha de Atrás siga siendo coherente después del salto. */
+  /* -------------------------------------------------------- cargas por capa */
+
+  async function renderCargas(capa) {
+    const paquetes = (await MapDB.getPaquetesDeZona(zonaActual()))
+      .filter((p) => p.capa === capa)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+    const filas = paquetes.map((p) => `
+        <div class="campana-fila" style="cursor:default">
+          <div class="campana-info">
+            <div class="campana-nombre">${p.etiqueta} ${p.activa ? '<span class="chip-activa">activa</span>' : ''}</div>
+            <div class="campana-detalle">${p.total} elementos · ${p.archivo}</div>
+          </div>
+          <div class="carga-acciones">
+            ${p.activa ? '' : `<button class="mini" data-activar="${p.id}">Usar</button>`}
+            <button class="mini peligro" data-borrar="${p.id}">Borrar</button>
+          </div>
+        </div>`).join('');
+
+    pintar(`${NOMBRE_CAPA[capa]} · Alim. ${alimentador}`, '', `
+      <button class="btn-secondary" id="btn-cargar-capa" style="width:100%; margin-bottom:14px;">⬆ Cargar archivo de ${NOMBRE_CAPA[capa]}</button>
+      ${filas || '<div class="campana-vacio">Todavía no se cargó ningún archivo de esta capa.</div>'}`);
+
+    $('#btn-cargar-capa').addEventListener('click', () => pedirArchivos(capa));
+    $('#campana-cuerpo').querySelectorAll('[data-activar]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        await MapDB.activarPaquete(el.dataset.activar);
+        await cargarCapasDeZona();
+        redibujar();
+        actualizarSubtitulo();
+        refrescarVista();
+      });
+    });
+    $('#campana-cuerpo').querySelectorAll('[data-borrar]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        await MapDB.deletePaquete(el.dataset.borrar);
+        await cargarCapasDeZona();
+        redibujar();
+        actualizarSubtitulo();
+        refrescarVista();
+        AppBridge.showToast('Carga borrada');
+      });
+    });
+  }
+
+  /* ------------------------------------------------------- importar archivos */
+
+  function pedirArchivos(capa) {
+    capaCargando = capa;
+    const input = $('#carga-input');
+    input.value = '';
+    input.click();
+  }
+
+  async function importarArchivos(archivos) {
+    let importados = 0;
+    const avisos = [];
+
+    for (const file of archivos) {
+      let leido;
+      try {
+        leido = await KmzParser.leer(file);
+      } catch (e) {
+        avisos.push(`${file.name}: ${e.message}`);
+        continue;
+      }
+
+      const capa = capaCargando || leido.capa;
+      if (!capa) {
+        avisos.push(`${file.name}: no se reconoce la capa por el nombre del archivo`);
+        continue;
+      }
+      if (!CAPAS.includes(capa)) {
+        avisos.push(`${file.name}: la capa "${capa}" no se usa en esta pantalla`);
+        continue;
+      }
+      // El archivo puede ser de otro alimentador: se avisa y no se importa,
+      // porque mezclarlos deja al técnico trabajando sobre una zona equivocada.
+      if (leido.alimentador && leido.alimentador !== alimentador) {
+        avisos.push(`${file.name}: es del alimentador ${leido.alimentador}, no del ${alimentador}`);
+        continue;
+      }
+
+      const ahora = new Date();
+      const id = `${zonaActual()}/${capa}/${ahora.getTime()}`;
+      await MapDB.putPaquete({
+        id,
+        zona: zonaActual(),
+        setSlug: setActual.slug,
+        alimentador,
+        capa,
+        archivo: file.name,
+        fecha: ahora.toISOString(),
+        etiqueta: `Carga del ${ahora.toLocaleDateString('es-PE')}`,
+        total: leido.total,
+        adjuntos: leido.adjuntos,
+        activa: true,
+        elementos: leido.elementos,
+      });
+      await MapDB.activarPaquete(id);
+      importados++;
+    }
+
+    await cargarCapasDeZona();
+    redibujar();
+    actualizarSubtitulo();
+    refrescarVista();
+
+    if (avisos.length) AppBridge.showToast(avisos.join(' · '), 6000);
+    else AppBridge.showToast(`${importados} archivo(s) cargado(s)`, 3000);
+  }
+
+  /* ----------------------------------------------------------- ficha cliente */
+
+  const ETIQUETAS = {
+    trafomix: 'Código Trafomix', sed: 'Código SED', etiqueta: 'Etiqueta',
+    serie: 'Serie', marca: 'Marca', modelo: 'Modelo',
+    tipo_trafomix: 'Tipo', fases: 'Fases', anio_fabricacion: 'Año de fabricación',
+    relacion_tension: 'Relación de tensión', relacion_corriente: 'Relación de corriente',
+    potencia_tension: 'Potencia en tensión', potencia_corriente: 'Potencia en corriente',
+    estructura: 'Estructura', tramo: 'Tramo MT', localidad: 'Localidad',
+    propietario: 'Propietario', potencia_kva: 'Potencia (kVA)', direccion: 'Dirección',
+  };
+
+  function abrirFicha(clave) {
+    const c = clientes.find((x) => x.sed === clave);
+    if (!c) return;
+    const fuente = c.gis || c;
+
+    const filas = Object.keys(ETIQUETAS)
+      .filter((k) => fuente[k] !== undefined && fuente[k] !== '')
+      .map((k) => `<div class="ficha-fila"><span>${ETIQUETAS[k]}</span><strong>${fuente[k]}</strong></div>`)
+      .join('');
+
+    $('#cliente-nombre').textContent = c.nombre || c.etiqueta || c.sed;
+    $('#cliente-sub').textContent = `${c.etiqueta || c.sed} · Alimentador ${c.alimentador}`;
+    $('#cliente-cuerpo').innerHTML = filas;
+
+    $('#cliente-ir-btn').onclick = () => {
+      AppBridge.closeSheet('#overlay-cliente');
+      AppBridge.closeSheet('#overlay-campana');
+      map().setView([c.lat, c.lon], 18);
+      if (marcadores[c.sed]) marcadores[c.sed].openTooltip();
+    };
+
+    const estado = estadoDe(c);
+    const btn = $('#cliente-encuesta-btn');
+    btn.textContent = estado === 'pendiente' ? 'Iniciar toma de datos'
+      : estado === 'borrador' ? 'Continuar toma de datos' : 'Ver toma de datos';
+    btn.onclick = () => {
+      AppBridge.closeSheet('#overlay-cliente');
+      AppBridge.closeSheet('#overlay-campana');
+      Encuesta.abrir(Object.assign({ setSlug: setActual.slug }, c));
+    };
+
+    AppBridge.openSheet('#overlay-cliente');
+  }
+
+  /* ------------------------------------------------------------------ migas */
+
   function conectarMigas() {
     $('#campana-migas').querySelectorAll('[data-volver]').forEach((el) => {
       el.addEventListener('click', () => {
         const a = el.dataset.volver;
-        if (a === 'sistemas') {
-          pila = [];
-          reemplazar(renderSistemas);
-        } else if (a === 'sets') {
+        if (a === 'sistemas') { pila = []; reemplazar(renderSistemas); }
+        else if (a === 'sets') {
           const sis = catalogo.sistemas.find((s) => s.codigo === el.dataset.codigo);
           pila = [renderSistemas];
           reemplazar(() => renderSets(sis));
         } else if (a === 'alimentadores') {
-          const sis = buscarSet(paquete.slug).sistema;
+          const sis = buscarSet(setActual.slug).sistema;
           pila = [renderSistemas];
           if (sis.sets.length > 1) pila.push(() => renderSets(sis));
           reemplazar(renderAlimentadores);
@@ -482,66 +661,15 @@ const Campana = (() => {
     });
   }
 
-  /* ----------------------------------------------------------- ficha cliente */
-
-  const ETIQUETAS = {
-    sed: 'Código SED', etiqueta: 'Etiqueta de campo', nombre: 'Nombre',
-    direccion: 'Dirección', alimentador: 'Alimentador', potencia_kva: 'Potencia (kVA)',
-    tipo_sed: 'Tipo de SED', tipo_instalacion: 'Instalación', fases_primario: 'Fases primario',
-    tension_primaria_kv: 'Tensión primaria (kV)', tension_secundaria_ff_kv: 'Tensión secundaria F-F (kV)',
-    n_transformadores: 'N.° de transformadores', codigo_tecnico: 'Código técnico',
-    estructura: 'Estructura', tramo: 'Tramo MT', localidad: 'Localidad', propietario: 'Propietario',
-  };
-
-  function abrirFicha(codigoSed) {
-    const c = paquete.clientes.find((x) => x.sed === codigoSed);
-    if (!c) return;
-
-    const filas = Object.keys(ETIQUETAS)
-      .filter((k) => c[k] !== undefined && c[k] !== '')
-      .map((k) => `<div class="ficha-fila"><span>${ETIQUETAS[k]}</span><strong>${c[k]}</strong></div>`)
-      .join('');
-
-    const aviso = c.dudoso
-      ? `<div class="ficha-aviso">Este punto figura como uso de utilización pero el propietario
-         registrado es «${c.propietario}». Confirmar en campo si corresponde a un cliente mayor.</div>`
-      : '';
-
-    $('#cliente-nombre').textContent = c.nombre || c.etiqueta || c.sed;
-    $('#cliente-sub').textContent = `${c.etiqueta || c.sed} · Alimentador ${c.alimentador}`;
-    $('#cliente-cuerpo').innerHTML = aviso + filas;
-    $('#cliente-ir-btn').onclick = () => {
-      AppBridge.closeSheet('#overlay-cliente');
-      AppBridge.closeSheet('#overlay-campana');
-      irACliente(c);
-    };
-    const estado = estadoDe(c);
-    const btn = $('#cliente-encuesta-btn');
-    btn.textContent = estado === 'pendiente' ? 'Iniciar toma de datos'
-      : estado === 'borrador' ? 'Continuar toma de datos' : 'Ver toma de datos';
-    btn.onclick = () => {
-      AppBridge.closeSheet('#overlay-cliente');
-      AppBridge.closeSheet('#overlay-campana');
-      // El slug de la SET va en la encuesta para poder exportar por zona (Fase 4).
-      Encuesta.abrir(Object.assign({ setSlug: paquete.slug }, c));
-    };
-
-    AppBridge.openSheet('#overlay-cliente');
-  }
-
-  /* ----------------------------------------------------------------- arranque */
+  /* ---------------------------------------------------------------- arranque */
 
   function actualizarSubtitulo() {
-    const el = document.querySelector('#subtitle-text');
+    const el = $('#subtitle-text');
     if (!el) return;
-    if (!paquete) {
-      el.textContent = 'Elegir zona de trabajo';
-      return;
-    }
-    const lista = clientesVisibles();
-    const { hechos, total } = resumenAvance(lista);
-    const donde = alimentador ? `Alim. ${alimentador}` : `SET ${paquete.set}`;
-    el.textContent = `${donde} · ${hechos}/${total}`;
+    if (!setActual) { el.textContent = 'Elegir zona de trabajo'; return; }
+    if (!alimentador) { el.textContent = `SET ${setActual.nombre}`; return; }
+    const { hechos, total } = resumenAvance(clientes);
+    el.textContent = `Alim. ${alimentador} · ${hechos}/${total}`;
   }
 
   async function iniciar() {
@@ -551,58 +679,42 @@ const Campana = (() => {
       AppBridge.showToast(e.message, 4000);
       return;
     }
-    // Si los estados no se pueden leer, la app igual tiene que abrir: se
-    // muestran todos como pendientes en vez de dejar la pantalla vacía.
-    try {
-      estados = await MapDB.getEstadosEncuestas();
-    } catch (e) {
-      console.warn('No se pudieron leer los estados de las encuestas:', e);
-      estados = {};
-    }
+    try { estados = await MapDB.getEstadosEncuestas(); }
+    catch (e) { console.warn('No se pudieron leer los estados:', e); estados = {}; }
 
     const slug = localStorage.getItem(CLAVE_SET);
+    const alim = localStorage.getItem(CLAVE_ALIM);
     if (slug && buscarSet(slug) && getTecnico()) {
-      try {
-        paquete = await cargarPaquete(slug);
-        alimentador = localStorage.getItem(CLAVE_ALIM) || null;
-        actualizarSubtitulo();
-        redibujar();
-        return;
-      } catch (e) {
-        // el paquete ya no está: se vuelve a preguntar
+      const encontrado = buscarSet(slug);
+      setActual = { slug, nombre: encontrado.set.nombre, sistema: encontrado.sistema };
+      if (encontrado.set.disponible) {
+        try { precompilado = await (await fetch(`data/set-${slug}.json`)).json(); }
+        catch (e) { precompilado = null; }
       }
+      if (alim) {
+        alimentador = alim;
+        await cargarCapasDeZona();
+        redibujar();
+      }
+      actualizarSubtitulo();
+      return;
     }
     actualizarSubtitulo();
     abrirSelector();
   }
 
-  function terminar() {
-    paquete = null;
-    alimentador = null;
-    localStorage.removeItem(CLAVE_SET);
-    localStorage.removeItem(CLAVE_ALIM);
-    limpiarMapa();
-    actualizarSubtitulo();
-    abrirSelector();
-  }
-
-  function hayZonaActiva() {
-    return !!paquete;
-  }
-
+  function hayZonaActiva() { return !!setActual; }
   function etiquetaActual() {
-    if (!paquete) return '';
-    return alimentador ? `SET ${paquete.set} · Alim. ${alimentador}` : `SET ${paquete.set}`;
+    if (!setActual) return '';
+    return alimentador ? `SET ${setActual.nombre} · Alim. ${alimentador}` : `SET ${setActual.nombre}`;
   }
 
   return {
-    iniciar, abrirSelector, terminar, hayZonaActiva, etiquetaActual,
-    redibujar, getTecnico, refrescarEstados, atras,
+    iniciar, abrirSelector, hayZonaActiva, etiquetaActual,
+    redibujar, getTecnico, refrescarEstados, atras, importarArchivos,
   };
 })();
 
-/* `const` en un script clásico NO crea una propiedad de window: sin esta línea,
-   los `if (window.Campana)` de app.js dan falso y los botones no hacen nada. */
 window.Campana = Campana;
 
 const esVisible = (sel) => document.querySelector(sel).classList.contains('visible');
@@ -610,6 +722,11 @@ const esVisible = (sel) => document.querySelector(sel).classList.contains('visib
 document.querySelector('#campana-atras').addEventListener('click', () => Campana.atras());
 document.querySelector('#cliente-atras').addEventListener('click',
   () => AppBridge.closeSheet('#overlay-cliente'));
+
+document.querySelector('#carga-input').addEventListener('change', (e) => {
+  const archivos = [...e.target.files];
+  if (archivos.length) Campana.importarArchivos(archivos);
+});
 
 /* Botón físico de Android. La toma de datos maneja el suyo (encuesta.js), por
    eso acá se devuelve false cuando ese panel está abierto. */

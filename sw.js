@@ -2,7 +2,7 @@
    Los tiles del mapa NO se cachean aquí: eso lo maneja IndexedDB desde app.js/db.js,
    para poder gestionarlos como "recortes" independientes con nombre, borrado, etc. */
 
-const CACHE_NAME = 'catastro-app-shell-v9';
+const CACHE_NAME = 'catastro-app-shell-v12';
 const APP_SHELL = [
   './',
   './index.html',
@@ -28,6 +28,7 @@ const APP_SHELL = [
   // la primera vez que se abre esa SET (el fetch de abajo es cache-first).
   './data/catalogo.json',
   './data/encuesta.json',
+  './data/alias.json',
   './js/vendor/leaflet.js',
   './js/vendor/fflate.js',
   './icons/icon-192.png',
@@ -124,11 +125,12 @@ self.addEventListener('fetch', (event) => {
      notaba. Ahora, habiendo señal, siempre se ejecuta la última versión
      publicada; sin señal, se responde con lo cacheado y la app abre igual.
 
-     Los data/*.json no cambian entre versiones y pesan cientos de KB, así que
-     ahí sí conviene responder de la caché y refrescar por detrás. */
-  const esCodigo = /\.(html|js|css)$/.test(url.pathname)
-    || event.request.mode === 'navigate'
-    || url.pathname.endsWith('/');
+     Cache-first va SOLO para los paquetes set-*.json: son cientos de KB y no
+     cambian entre versiones. El resto de data/ (catalogo, esquema del
+     formulario, alias de campos) cambia junto con el código y tiene que
+     seguir la misma regla, o la app corre con un esquema viejo. */
+  const esPaquete = /\/data\/set-[^/]+\.json$/.test(url.pathname);
+  const esCodigo = !esPaquete;
 
   const guardar = (resp) => {
     if (resp && resp.ok) {

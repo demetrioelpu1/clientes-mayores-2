@@ -714,3 +714,60 @@ html, body {
 }
 .res-acciones button { flex: 1; padding: 13px; font-size: 14px; }
 .res-acciones button:disabled { opacity: .35; }
+
+/* ---------- Fase 2: estado de las capas cargadas por alimentador ---------- */
+.capa-tira {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.capa-chip {
+  border-radius: 9px;
+  padding: 9px 6px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,.05);
+}
+.capa-chip.ok { border-color: rgba(63,168,95,.55); }
+.capa-chip.respaldo { border-color: rgba(212,175,31,.45); }
+.capa-chip.falta { border-color: rgba(255,255,255,.10); opacity: .6; }
+.capa-nombre { font-size: 11px; font-weight: 600; }
+.capa-detalle { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
+.capa-chip.ok .capa-detalle { color: var(--green); }
+
+.carga-acciones { display: flex; gap: 6px; flex: 0 0 auto; }
+button.mini {
+  padding: 6px 10px;
+  font-size: 11px;
+  border-radius: 7px;
+  border: 1px solid #3a3b44;
+  background: #26272e;
+  color: var(--text);
+  cursor: pointer;
+}
+button.mini.peligro { color: #f0645a; border-color: rgba(240,100,90,.4); }
+.chip-activa {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--dark);
+  background: var(--green);
+  border-radius: 20px;
+  padding: 2px 7px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* ---------- Referencia del GIS bajo cada campo ---------- */
+.campo-gis {
+  font-size: 10.5px;
+  line-height: 1.4;
+  margin-top: 5px;
+  padding-left: 2px;
+  color: var(--text-dim);
+}
+.campo-gis.vacio { opacity: .55; font-style: italic; }
+.campo-gis.igual { color: var(--green); }
+.campo-gis.distinto { color: var(--accent); font-weight: 600; }
+.paso-progreso .dif { color: var(--accent); }

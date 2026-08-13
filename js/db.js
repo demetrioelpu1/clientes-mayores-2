@@ -1,12 +1,13 @@
 /* db.js — capa de acceso a IndexedDB para tiles de mapa y recortes (packs) offline */
 
 const DB_NAME = 'catastro-map-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_TILES = 'tiles';
 const STORE_PACKS = 'packs';
 const STORE_NETWORK = 'network_features'; // postes, tramos, subestaciones cargados desde KMZ/KML
 const STORE_ENCUESTAS = 'encuestas';      // una por cliente mayor (Fase 3)
 const STORE_FOTOS = 'fotos';              // Blobs aparte: listar encuestas no debe arrastrar MB
+const STORE_PAQUETES = 'paquetes';        // KMZ cargados por alimentador, versionados (Fase 2)
 
 let _dbPromise = null;
 
@@ -38,6 +39,13 @@ function openDB() {
       if (!db.objectStoreNames.contains(STORE_FOTOS)) {
         // key: "<sed>/<bloque>/<idFoto>", value: Blob ya comprimido
         db.createObjectStore(STORE_FOTOS);
+      }
+      if (!db.objectStoreNames.contains(STORE_PAQUETES)) {
+        // Cada KMZ cargado queda como una "carga" con su fecha. No se
+        // sobrescribe: la anterior queda archivada hasta que alguien la borre,
+        // así se puede saber contra qué versión del GIS se comparó en campo.
+        const store = db.createObjectStore(STORE_PAQUETES, { keyPath: 'id' });
+        store.createIndex('zona', 'zona');
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -353,6 +361,66 @@ async function deleteFotosDe(sed) {
   for (const k of keys) await deleteFoto(k);
 }
 
+/* ---- paquetes de datos del GIS cargados desde KMZ (Fase 2) ---- */
+
+function zonaKey(setSlug, alimentador) {
+  return `${setSlug}/${alimentador}`;
+}
+
+async function putPaquete(paquete) {
+  const store = await tx(STORE_PAQUETES, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(paquete);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getPaquetesDeZona(zona) {
+  const store = await tx(STORE_PAQUETES, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.index('zona').getAll(zona);
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getTodosLosPaquetes() {
+  const store = await tx(STORE_PAQUETES, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* Solo puede haber una carga activa por zona y capa: al activar una, se
+   desactivan las demás de esa misma capa. */
+async function activarPaquete(id) {
+  const store = await tx(STORE_PAQUETES, 'readonly');
+  const paquete = await new Promise((resolve, reject) => {
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  if (!paquete) return;
+  const hermanos = await getPaquetesDeZona(paquete.zona);
+  for (const p of hermanos) {
+    if (p.capa !== paquete.capa) continue;
+    const activa = p.id === id;
+    if (p.activa !== activa) await putPaquete(Object.assign({}, p, { activa }));
+  }
+}
+
+async function deletePaquete(id) {
+  const store = await tx(STORE_PAQUETES, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 window.MapDB = {
   tileKey,
   putTile,
@@ -383,4 +451,10 @@ window.MapDB = {
   getFoto,
   deleteFoto,
   listarFotoKeys,
+  zonaKey,
+  putPaquete,
+  getPaquetesDeZona,
+  getTodosLosPaquetes,
+  activarPaquete,
+  deletePaquete,
 };
