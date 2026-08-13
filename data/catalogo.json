@@ -35,7 +35,7 @@
      ],
      "disponible": true,
      "archivo": "data/set-juliaca.json",
-     "kb": 511,
+     "kb": 531,
      "clientes": 26,
      "bbox": [
       -70.1424297,
@@ -320,7 +320,7 @@
      ],
      "disponible": true,
      "archivo": "data/set-juliaca-rural.json",
-     "kb": 46,
+     "kb": 47,
      "clientes": 2,
      "bbox": [
       -70.1406577,

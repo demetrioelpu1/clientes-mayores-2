@@ -145,12 +145,32 @@ html, body {
 }
 .select-crosshair.visible { display: flex; }
 
-#select-toolbar button {
-  border: none; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+/* ---------- Botones ----------
+   El color siempre salió de estas tres clases, pero la FORMA (borde, esquinas,
+   tipografía) la ponía la regla de cada panel. Los botones que no caían en
+   ninguna de esas reglas —los de la ficha de cliente, entre otros— salían con
+   el estilo por defecto del navegador: borde "outset", esquinas rectas y
+   Arial en vez de la tipografía de la app. Acá va la forma una sola vez y cada
+   panel ajusta nada más el tamaño. */
+.btn-primary, .btn-secondary, .btn-danger {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+.btn-primary:active, .btn-secondary:active, .btn-danger:active { filter: brightness(.92); }
+.btn-primary:disabled, .btn-secondary:disabled, .btn-danger:disabled { opacity: .35; filter: none; }
+
 .btn-primary { background: var(--accent); color: #241300; }
 .btn-secondary { background: #33343c; color: var(--text); }
 .btn-danger { background: var(--red); color: #2a0505; }
+
+#select-toolbar button { padding: 7px 12px; font-size: 12px; }
 
 /* ---------- Bottom info bar (coordenadas) ---------- */
 #bottombar {
@@ -220,7 +240,7 @@ html, body {
 .pack-item .pack-name { font-size: 13.5px; font-weight: 700; margin-bottom: 2px; }
 .pack-item .pack-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .pack-item .pack-actions { display: flex; gap: 8px; }
-.pack-item .pack-actions button { flex: 1; padding: 7px; font-size: 11.5px; border-radius: 7px; border: none; font-weight: 600; }
+.pack-item .pack-actions button { flex: 1; padding: 7px; font-size: 11.5px; }
 
 .form-row { margin-bottom: 12px; }
 .form-row label { display: block; font-size: 11.5px; color: var(--text-dim); margin-bottom: 5px; }
@@ -421,6 +441,19 @@ html, body {
   margin-top: 14px;
 }
 .cliente-acciones button { flex: 1; padding: 11px; }
+.cliente-acciones button[hidden] { display: none; }
+
+/* Marcador triangular de la SED. Leaflet le pone fondo y borde blancos a todo
+   .leaflet-div-icon: hay que sacárselos o el triángulo sale dentro de un
+   cuadrado. El área táctil es mayor que el dibujo para poder acertarle. */
+.marcador-sed {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.marcador-sed svg { overflow: visible; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
 
 /* ---------- Panel semitransparente: deja ver el mapa detrás ----------
    Solo el panel de zona de trabajo y la ficha; los demás quedan opacos

@@ -63,7 +63,11 @@ const KmzParser = (() => {
   }
 
   function limpiar(celda) {
-    return celda.replace(RE_TAGS, '').replace(/ /g, ' ').trim();
+    const texto = celda.replace(RE_TAGS, '').replace(/ /g, ' ').trim();
+    // El GIS escribe los vacios como "<Nulo>". Hoy RE_TAGS se lo lleva puesto
+    // por parecerse a una etiqueta, pero eso es casualidad: dejarlo explicito
+    // para que siga coincidiendo con tools/kmz_to_geojson.py.
+    return /^<nul[lo]>$/i.test(texto) ? '' : texto;
   }
 
   function desescapar(s) {

@@ -1,3 +1,7 @@
 # artefactos locales de desarrollo
 .claude/
 _tmp_prueba/
+
+# Paquetes por SET: los genera tools/build_app_data.py y pesan cientos de KB.
+# catalogo.json, encuesta.json y alias.json SÍ van: sin ellos la app no arranca.
+data/set-*.json

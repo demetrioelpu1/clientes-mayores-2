@@ -32,6 +32,18 @@ const Campana = (() => {
     completa: '#3fa85f',
   };
 
+  /* La SED va en triángulo (pedido del ingeniero): es la convención del GIS y
+     así no se confunde con los círculos, que son los clientes mayores. */
+  const ICONO_SED = L.divIcon({
+    className: 'marcador-sed',
+    html: '<svg viewBox="0 0 20 18" width="20" height="18" aria-hidden="true">'
+      + `<polygon points="10,1 19,17 1,17" fill="${COLOR.sed}" stroke="#ffffff" stroke-width="2"`
+      + ' stroke-linejoin="round"/></svg>',
+    iconSize: [20, 18],
+    iconAnchor: [10, 9],
+    tooltipAnchor: [0, -9],
+  });
+
   let catalogo = null;
   let precompilado = null;     // data/set-<slug>.json, si existe
   let setActual = null;        // { slug, nombre, sistema }
@@ -184,13 +196,12 @@ const Campana = (() => {
 
     if ((capas.sed || []).length) {
       grupos.sed = L.geoJSON(fc(capas.sed), {
-        pointToLayer: (f, latlng) => L.circleMarker(latlng, {
-          radius: 4, weight: 1, color: '#ffffff', fillColor: COLOR.sed, fillOpacity: 0.85,
-        }),
+        pointToLayer: (f, latlng) => L.marker(latlng, { icon: ICONO_SED, keyboard: false }),
         onEachFeature: (f, capa) => {
           const p = f.properties;
           capa.bindTooltip(`SED ${p.etiqueta || p.sed || ''} · ${p.potencia_kva || '—'} kVA`,
             { direction: 'top' });
+          capa.on('click', () => abrirFichaSed(p, capa.getLatLng()));
         },
       }).addTo(map());
     }
@@ -644,19 +655,59 @@ const Campana = (() => {
     propietario: 'Propietario', potencia_kva: 'Potencia (kVA)', direccion: 'Dirección',
   };
 
+  /* Los campos de la SED que pidió el ingeniero, en su orden. Vienen los 11 en
+     el 100% de los registros de Ananea, salvo "etiqueta anterior" (100/118). */
+  const ETIQUETAS_SED = {
+    alimentador: 'Código de salida MT', etiqueta: 'Etiqueta de campo',
+    nombre: 'Nombre SED', direccion: 'Dirección SED', propietario: 'Propietario',
+    potencia_kva: 'Potencia instalada (kVA)', fases_primario: 'Fases primario',
+    tension_primaria_kv: 'Tensión nominal primario (kV)',
+    sistema: 'Código de sistema eléctrico',
+    sed_etiqueta_anterior: 'SED: etiqueta anterior', sielse_etiqueta: 'SIELSE: etiqueta',
+  };
+
+  function esc(v) {
+    return String(v).replace(/[&<>"]/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  function filasDe(fuente, etiquetas) {
+    return Object.keys(etiquetas)
+      .filter((k) => fuente[k] !== undefined && fuente[k] !== '')
+      .map((k) => `<div class="ficha-fila"><span>${etiquetas[k]}</span>`
+        + `<strong>${esc(fuente[k])}</strong></div>`)
+      .join('');
+  }
+
+  /* Ficha de una SED: es solo consulta, acá no se toma ningún dato — lo que se
+     inspecciona es el trafomix del cliente. */
+  function abrirFichaSed(p, latlng) {
+    $('#cliente-nombre').textContent = p.nombre || p.etiqueta || 'SED';
+    $('#cliente-sub').textContent =
+      `SED ${p.etiqueta || ''} · Alimentador ${p.alimentador || alimentador || ''}`;
+    $('#cliente-cuerpo').innerHTML = filasDe(p, ETIQUETAS_SED);
+
+    $('#cliente-ir-btn').hidden = false;
+    $('#cliente-ir-btn').onclick = () => {
+      AppBridge.closeSheet('#overlay-cliente');
+      AppBridge.closeSheet('#overlay-campana');
+      map().setView(latlng, 18);
+    };
+    $('#cliente-encuesta-btn').hidden = true;
+
+    AppBridge.openSheet('#overlay-cliente');
+  }
+
   function abrirFicha(clave) {
     const c = clientes.find((x) => x.sed === clave);
     if (!c) return;
     const fuente = c.gis || c;
 
-    const filas = Object.keys(ETIQUETAS)
-      .filter((k) => fuente[k] !== undefined && fuente[k] !== '')
-      .map((k) => `<div class="ficha-fila"><span>${ETIQUETAS[k]}</span><strong>${fuente[k]}</strong></div>`)
-      .join('');
-
     $('#cliente-nombre').textContent = c.nombre || c.etiqueta || c.sed;
     $('#cliente-sub').textContent = `${c.etiqueta || c.sed} · Alimentador ${c.alimentador}`;
-    $('#cliente-cuerpo').innerHTML = filas;
+    $('#cliente-cuerpo').innerHTML = filasDe(fuente, ETIQUETAS);
+    $('#cliente-ir-btn').hidden = false;
+    $('#cliente-encuesta-btn').hidden = false;
 
     $('#cliente-ir-btn').onclick = () => {
       AppBridge.closeSheet('#overlay-cliente');
