@@ -102,9 +102,15 @@ const Campana = (() => {
      que es lo que había en la muestra de Juliaca. */
   function construirClientes() {
     if (capas.trafomix && capas.trafomix.length) {
+      /* El nombre del cliente vive en la capa SED. El KMZ de Ananea no trae
+         "Código SED", así que se indexa también por etiqueta de campo, que es
+         lo que el trafomix guarda en `sed_etiqueta` (SE08390). */
       const nombres = {};
       (capas.sed || []).forEach((f) => {
-        if (f.properties.sed) nombres[f.properties.sed] = f.properties.nombre || '';
+        const p = f.properties;
+        if (!p.nombre) return;
+        if (p.sed) nombres[p.sed] = p.nombre;
+        if (p.etiqueta) nombres[p.etiqueta] = p.nombre;
       });
       return capas.trafomix.map((f) => {
         const p = f.properties;
@@ -113,7 +119,7 @@ const Campana = (() => {
           sed: p.trafomix || p.sed || p.estructura,   // clave estable de la toma de datos
           tipo: 'trafomix',
           etiqueta: p.trafomix || '',
-          nombre: nombres[p.sed] || p.sed_etiqueta || p.sed || '',
+          nombre: nombres[p.sed] || nombres[p.sed_etiqueta] || p.sed_etiqueta || p.sed || '',
           alimentador: p.alimentador || alimentador,
           sistema: p.sistema || '',
           potencia_kva: p.potencia_tension || '',
@@ -467,9 +473,26 @@ const Campana = (() => {
     const encontrado = buscarSet(setActual.slug);
     const migas = `<span data-volver="sistemas">Sistemas</span> › <span data-volver="alimentadores">SET ${encontrado.set.nombre}</span> › <strong>Alim. ${alimentador}</strong>`;
 
+    // El botón cambia según lo que falte: una vez cargadas las tres capas ya no
+    // invita a cargar de nuevo, para que nadie duplique cargas por las dudas.
+    const faltan = CAPAS.filter((c) => !paquetes.some((p) => p.capa === c && p.activa));
+    const botonCarga = faltan.length === 0
+      ? `<div class="carga-estado">
+           <span class="carga-tilde">✓</span>
+           <div>
+             <div class="carga-titulo">Datos cargados</div>
+             <div class="carga-sub">Las tres capas de este alimentador están listas</div>
+           </div>
+           <button class="mini" id="btn-cargar-kmz">Agregar</button>
+         </div>`
+      : `<button class="btn-cargar" id="btn-cargar-kmz">
+           <span class="icono">⬆</span>
+           <span>Cargar KMZ · falta ${faltan.map((c) => NOMBRE_CAPA[c]).join(', ')}</span>
+         </button>`;
+
     pintar(`Clientes mayores (${hechos}/${total})`, migas, `
       <div class="capa-tira">${tira}</div>
-      <button class="btn-secondary" id="btn-cargar-kmz" style="width:100%; margin-bottom:14px;">⬆ Cargar KMZ de este alimentador</button>
+      ${botonCarga}
       ${filas || '<div class="campana-vacio">No hay clientes mayores cargados en este alimentador.</div>'}`);
     conectarMigas();
 
@@ -501,8 +524,23 @@ const Campana = (() => {
           </div>
         </div>`).join('');
 
+    const activa = paquetes.find((p) => p.activa);
+    const boton = activa
+      ? `<div class="carga-estado">
+           <span class="carga-tilde">✓</span>
+           <div>
+             <div class="carga-titulo">${NOMBRE_CAPA[capa]} cargado</div>
+             <div class="carga-sub">${activa.total} elementos · ${activa.etiqueta}</div>
+           </div>
+           <button class="mini" id="btn-cargar-capa">Reemplazar</button>
+         </div>`
+      : `<button class="btn-cargar" id="btn-cargar-capa">
+           <span class="icono">⬆</span>
+           <span>Cargar archivo de ${NOMBRE_CAPA[capa]}</span>
+         </button>`;
+
     pintar(`${NOMBRE_CAPA[capa]} · Alim. ${alimentador}`, '', `
-      <button class="btn-secondary" id="btn-cargar-capa" style="width:100%; margin-bottom:14px;">⬆ Cargar archivo de ${NOMBRE_CAPA[capa]}</button>
+      ${boton}
       ${filas || '<div class="campana-vacio">Todavía no se cargó ningún archivo de esta capa.</div>'}`);
 
     $('#btn-cargar-capa').addEventListener('click', () => pedirArchivos(capa));

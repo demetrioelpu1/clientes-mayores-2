@@ -8,8 +8,8 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="stylesheet" href="css/leaflet.css?v=12" />
-<link rel="stylesheet" href="css/app.css?v=12" />
+<link rel="stylesheet" href="css/leaflet.css?v=14" />
+<link rel="stylesheet" href="css/app.css?v=14" />
 </head>
 <body>
 <div id="app">
@@ -259,12 +259,11 @@
       </h2>
       <div class="cliente-sub" id="encuesta-sub"></div>
 
-      <div class="paso-cabecera">
-        <div class="paso-bloque" id="encuesta-bloque"></div>
-        <div class="paso-num" id="encuesta-paso-num"></div>
+      <div class="bloque-selector">
+        <button class="bloque-actual" id="bloque-actual"></button>
+        <div class="bloque-lista" id="bloque-lista" hidden></div>
       </div>
       <div class="paso-barra"><div class="paso-barra-relleno" id="encuesta-barra-relleno"></div></div>
-      <select class="paso-salto" id="encuesta-salto"></select>
 
       <div id="encuesta-cuerpo"></div>
 
@@ -299,15 +298,15 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/fflate.js"></script>
-<script src="js/db.js?v=12"></script>
-<script src="js/offline-tilelayer.js?v=12"></script>
-<script src="js/kmz.js?v=12"></script>
-<script src="js/network.js?v=12"></script>
-<script src="js/app.js?v=12"></script>
-<script src="js/campana.js?v=12"></script>
-<script src="js/encuesta.js?v=12"></script>
-<script src="js/xlsx.js?v=12"></script>
-<script src="js/resultados.js?v=12"></script>
+<script src="js/db.js?v=14"></script>
+<script src="js/offline-tilelayer.js?v=14"></script>
+<script src="js/kmz.js?v=14"></script>
+<script src="js/network.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
+<script src="js/campana.js?v=14"></script>
+<script src="js/encuesta.js?v=14"></script>
+<script src="js/xlsx.js?v=14"></script>
+<script src="js/resultados.js?v=14"></script>
 <script>Campana.iniciar();</script>
 </body>
 </html>

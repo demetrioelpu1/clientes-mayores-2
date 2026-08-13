@@ -56,9 +56,13 @@ const Encuesta = (() => {
     AppBridge.openSheet('#overlay-encuesta');
   }
 
-  /* Al continuar una toma de datos a medias, se abre donde quedó. */
+  /* Al continuar una toma de datos a medias, se abre en el primer bloque que
+     todavía tenga algo pendiente. */
   function primerPasoIncompleto() {
-    const i = pasos.findIndex((p) => !pasoCompleto(p));
+    const i = esquema.bloques.findIndex((b) => {
+      const c = contarBloque(b);
+      return c.llenos < c.total || c.fotos < c.totalFotos;
+    });
     return i === -1 ? 0 : i;
   }
 
@@ -109,44 +113,96 @@ const Encuesta = (() => {
 
   /* ---------------------------------------------------------------- dibujar */
 
+  /* Se navega por BLOQUE (5), no por paso (22): el desplegable de 22 opciones
+     que había antes se volvía una lista interminable en el celular. Adentro de
+     cada bloque los grupos siguen separados, pero todos a la vista y en una
+     sola pantalla que se recorre bajando. */
   function render() {
-    const { bloque, paso } = pasos[indice];
+    const bloque = esquema.bloques[indice];
 
     $('#encuesta-titulo').textContent = cliente.nombre || cliente.etiqueta || cliente.sed;
     $('#encuesta-sub').textContent =
       `${cliente.etiqueta || cliente.sed} · Alim. ${cliente.alimentador} · ${cliente.potencia_kva || '—'} kVA`;
 
-    // Selector para saltar a cualquier paso sin recorrerlos todos.
-    $('#encuesta-salto').innerHTML = pasos
-      .map((p, i) => {
-        const marca = pasoCompleto(p) ? '✓' : '○';
-        return `<option value="${i}" ${i === indice ? 'selected' : ''}>${marca} ${p.bloque.titulo} · ${p.paso.titulo}</option>`;
-      })
-      .join('');
+    renderSelector();
+    $('#encuesta-barra-relleno').style.width = `${((indice + 1) / esquema.bloques.length) * 100}%`;
 
-    $('#encuesta-bloque').textContent = bloque.titulo;
-    $('#encuesta-paso-num').textContent = `Paso ${indice + 1} de ${pasos.length}`;
-    $('#encuesta-barra-relleno').style.width = `${((indice + 1) / pasos.length) * 100}%`;
-
-    const ayuda = paso.ayuda ? `<div class="paso-ayuda">${paso.ayuda}</div>` : '';
-    const cuerpo = paso.fotos
-      ? `<div class="foto-grilla">${paso.fotos.map((f) => renderFoto(bloque, f)).join('')}</div>`
-      : (paso.campos || []).map((campo) => renderCampo(bloque, campo)).join('');
-
-    $('#encuesta-cuerpo').innerHTML = `
-      <div class="paso-titulo">${paso.titulo}</div>
-      ${ayuda}
-      ${cuerpo}
-      ${indice === 0 ? '<div class="auto-ficha" id="encuesta-auto"></div>' : ''}`;
+    const grupos = bloque.pasos.map((paso) => renderGrupo(bloque, paso)).join('');
+    $('#encuesta-cuerpo').innerHTML =
+      grupos + (indice === 0 ? '<div class="auto-ficha" id="encuesta-auto"></div>' : '');
 
     $('#encuesta-atras').disabled = indice === 0;
     $('#encuesta-siguiente').textContent =
-      indice === pasos.length - 1 ? 'Terminar' : 'Siguiente';
+      indice === esquema.bloques.length - 1 ? 'Terminar' : 'Siguiente';
 
     if (indice === 0) pintarAutomaticos();
     conectar();
     actualizarProgreso();
-    if (paso.fotos) pintarFotosGuardadas(bloque, paso);
+    bloque.pasos.forEach((paso) => { if (paso.fotos) pintarFotosGuardadas(bloque, paso); });
+  }
+
+  function renderGrupo(bloque, paso) {
+    const ayuda = paso.ayuda ? `<div class="grupo-ayuda">${paso.ayuda}</div>` : '';
+    const cuerpo = paso.fotos
+      ? `<div class="foto-grilla">${paso.fotos.map((f) => renderFoto(bloque, f)).join('')}</div>`
+      : (paso.campos || []).map((campo) => renderCampo(bloque, campo)).join('');
+    return `
+      <div class="grupo">
+        <div class="grupo-titulo">${paso.titulo}</div>
+        ${ayuda}
+        ${cuerpo}
+      </div>`;
+  }
+
+  function contarBloque(bloque) {
+    let llenos = 0, total = 0, fotosOk = 0, totalFotos = 0;
+    bloque.pasos.forEach((paso) => {
+      const c = contarPaso({ bloque, paso });
+      llenos += c.llenos; total += c.total;
+      fotosOk += c.fotos; totalFotos += c.totalFotos;
+    });
+    return { llenos, total, fotos: fotosOk, totalFotos };
+  }
+
+  function resumenBloque(bloque) {
+    const c = contarBloque(bloque);
+    const partes = [`${c.llenos}/${c.total}`];
+    if (c.totalFotos) partes.push(`${c.fotos}/${c.totalFotos} fotos`);
+    return { texto: partes.join(' · '), completo: c.llenos === c.total && c.fotos === c.totalFotos };
+  }
+
+  /* Desplegable propio: el <select> nativo de Android se abre como una lista
+     a pantalla completa que no se puede estilar. */
+  function renderSelector() {
+    const bloque = esquema.bloques[indice];
+    const r = resumenBloque(bloque);
+    $('#bloque-actual').innerHTML = `
+      <span class="bloque-nom">${bloque.titulo}</span>
+      <span class="bloque-cont ${r.completo ? 'completo' : ''}">${r.texto}</span>
+      <span class="bloque-caret">▾</span>`;
+
+    $('#bloque-lista').innerHTML = esquema.bloques.map((b, i) => {
+      const rb = resumenBloque(b);
+      return `
+        <div class="bloque-op ${i === indice ? 'actual' : ''}" data-bloque-idx="${i}">
+          <span class="bloque-marca">${rb.completo ? '✓' : '○'}</span>
+          <span class="bloque-nom">${b.titulo}</span>
+          <span class="bloque-cont ${rb.completo ? 'completo' : ''}">${rb.texto}</span>
+        </div>`;
+    }).join('');
+
+    $('#bloque-lista').querySelectorAll('[data-bloque-idx]').forEach((el) => {
+      el.addEventListener('click', () => {
+        cerrarSelector();
+        irA(+el.dataset.bloqueIdx);
+      });
+    });
+  }
+
+  function abrirSelector() { $('#bloque-lista').hidden = false; $('#bloque-actual').classList.add('abierto'); }
+  function cerrarSelector() { $('#bloque-lista').hidden = true; $('#bloque-actual').classList.remove('abierto'); }
+  function alternarSelector() {
+    if ($('#bloque-lista').hidden) abrirSelector(); else cerrarSelector();
   }
 
   function renderCampo(bloque, campo) {
@@ -265,9 +321,10 @@ const Encuesta = (() => {
   /* ----------------------------------------------------------------- eventos */
 
   function conectar() {
-    const { paso } = pasos[indice];
     const defs = {};
-    (paso.campos || []).forEach((c) => { defs[c.id] = c; });
+    esquema.bloques[indice].pasos.forEach((paso) => {
+      (paso.campos || []).forEach((c) => { defs[c.id] = c; });
+    });
 
     $('#encuesta-cuerpo').querySelectorAll('[data-campo]').forEach((el) => {
       el.addEventListener('input', () => {
@@ -351,7 +408,7 @@ const Encuesta = (() => {
   /* --------------------------------------------------------------- navegación */
 
   function irA(i) {
-    indice = Math.max(0, Math.min(pasos.length - 1, i));
+    indice = Math.max(0, Math.min(esquema.bloques.length - 1, i));
     render();
     $('#overlay-encuesta .sheet').scrollTop = 0;
   }
@@ -393,6 +450,16 @@ const Encuesta = (() => {
     $('#encuesta-progreso').innerHTML =
       `${campos}/${camposTotal} campos · ${fotosOk}/${fotosTotal} fotos`
       + (dif ? ` · <b class="dif">${dif} ${dif === 1 ? 'diferencia' : 'diferencias'} con el GIS</b>` : '');
+    // El contador del bloque activo vive en la cabecera: hay que refrescarlo
+    // en cada tecla, no solo al cambiar de bloque.
+    if (esquema && $('#bloque-actual')) {
+      const r = resumenBloque(esquema.bloques[indice]);
+      const cont = $('#bloque-actual .bloque-cont');
+      if (cont) {
+        cont.textContent = r.texto;
+        cont.classList.toggle('completo', r.completo);
+      }
+    }
     return { campos, camposTotal, fotosOk, fotosTotal };
   }
 
@@ -458,9 +525,9 @@ const Encuesta = (() => {
     return falta;
   }
 
-  return { abrir, cerrar, faltantes, estadoActual, irA, diferencias,
+  return { abrir, cerrar, faltantes, estadoActual, irA, diferencias, alternarSelector,
            siguiente: () => irA(indice + 1), atras: () => irA(indice - 1),
-           pasoActual: () => indice, totalPasos: () => pasos.length };
+           pasoActual: () => indice, totalPasos: () => (esquema ? esquema.bloques.length : 0) };
 })();
 
 window.Encuesta = Encuesta;
@@ -495,5 +562,5 @@ AppBridge.registrarAtras(() => {
   atrasEncuesta();
   return true;
 });
-document.querySelector('#encuesta-salto').addEventListener('change', (e) => Encuesta.irA(+e.target.value));
+document.querySelector('#bloque-actual').addEventListener('click', () => Encuesta.alternarSelector());
 document.querySelector('#encuesta-cerrar').addEventListener('click', () => Encuesta.cerrar());
