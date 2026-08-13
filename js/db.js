@@ -1,9 +1,10 @@
 /* db.js — capa de acceso a IndexedDB para tiles de mapa y recortes (packs) offline */
 
 const DB_NAME = 'catastro-map-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_TILES = 'tiles';
 const STORE_PACKS = 'packs';
+const STORE_NETWORK = 'network_features'; // postes, tramos, subestaciones cargados desde KMZ/KML
 
 let _dbPromise = null;
 
@@ -19,6 +20,11 @@ function openDB() {
       if (!db.objectStoreNames.contains(STORE_PACKS)) {
         const store = db.createObjectStore(STORE_PACKS, { keyPath: 'id' });
         store.createIndex('createdAt', 'createdAt');
+      }
+      if (!db.objectStoreNames.contains(STORE_NETWORK)) {
+        const store = db.createObjectStore(STORE_NETWORK, { keyPath: 'id' });
+        store.createIndex('layer', 'layer');
+        store.createIndex('setName', 'setName');
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -189,6 +195,56 @@ function countTilesForPackSpec(bounds, minZoom, maxZoom, layerCount) {
   return total * layerCount;
 }
 
+/* ---- network_features (postes, tramos, subestaciones cargados desde KMZ/KML) ---- */
+
+async function addNetworkFeatures(features) {
+  const store = await tx(STORE_NETWORK, 'readwrite');
+  return new Promise((resolve, reject) => {
+    let remaining = features.length;
+    if (remaining === 0) return resolve();
+    features.forEach((f) => {
+      const req = store.put(f);
+      req.onsuccess = () => { remaining--; if (remaining === 0) resolve(); };
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function getAllNetworkFeatures() {
+  const store = await tx(STORE_NETWORK, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getNetworkFeaturesByLayer(layer) {
+  const store = await tx(STORE_NETWORK, 'readonly');
+  return new Promise((resolve, reject) => {
+    const idx = store.index('layer');
+    const req = idx.getAll(layer);
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function countNetworkFeaturesByLayer() {
+  const all = await getAllNetworkFeatures();
+  const counts = {};
+  for (const f of all) counts[f.layer] = (counts[f.layer] || 0) + 1;
+  return counts;
+}
+
+async function clearAllNetworkFeatures() {
+  const store = await tx(STORE_NETWORK, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 window.MapDB = {
   tileKey,
   putTile,
@@ -204,4 +260,9 @@ window.MapDB = {
   tileKeysForPack,
   tileRangeForBoundsAtZoom,
   countTilesForPackSpec,
+  addNetworkFeatures,
+  getAllNetworkFeatures,
+  getNetworkFeaturesByLayer,
+  countNetworkFeaturesByLayer,
+  clearAllNetworkFeatures,
 };

@@ -56,6 +56,12 @@ html, body {
   font-size: 10.5px; color: var(--text-dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.subtitle-btn {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: none; border: none; padding: 0; margin: 0;
+  font-family: inherit; cursor: pointer; max-width: 100%;
+}
+.subtitle-btn .subtitle-caret { font-size: 9px; color: var(--text-dim); flex-shrink: 0; }
 
 .gps-pill {
   display: flex; align-items: center; gap: 6px; flex-shrink: 0;
@@ -240,3 +246,81 @@ html, body {
   opacity: 0; pointer-events: none; transition: opacity .25s;
 }
 .toast.visible { opacity: 1; }
+
+/* ---------- Botón outline (peligro, ej. "Limpiar red cargada") ---------- */
+.btn-outline-danger {
+  background: transparent; border: 1px solid var(--red); color: var(--red);
+  border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px;
+}
+
+/* ---------- Panel "Red eléctrica base" ---------- */
+.network-load-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.network-load-row button { flex: 1; padding: 10px 6px; font-size: 12px; }
+
+.section-label {
+  font-size: 10.5px; letter-spacing: 0.6px; color: var(--text-dim); font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.network-layer-row {
+  display: flex; align-items: center; gap: 10px;
+  background: #26272e; border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+}
+.network-layer-row .layer-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+}
+.network-layer-row .layer-dot.dot-line { border-radius: 3px; height: 4px; width: 18px; }
+.network-layer-row .layer-info { flex: 1; min-width: 0; }
+.network-layer-row .layer-name { font-size: 13px; font-weight: 600; }
+.network-layer-row .layer-count { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+.network-layer-row .layer-count.has-data { color: var(--accent); }
+
+.hint-box {
+  font-size: 11.5px; color: var(--text-dim); line-height: 1.5;
+  background: #1b1c21; border-radius: 10px; padding: 12px; margin-top: 14px;
+}
+
+/* Switch tipo iOS */
+.switch { position: relative; display: inline-block; width: 44px; height: 26px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #44454e; border-radius: 26px; transition: background .2s;
+}
+.switch .slider::before {
+  position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+  background: #f2f2f2; border-radius: 50%; transition: transform .2s;
+}
+.switch input:checked + .slider { background: var(--green); }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+
+/* ---------- Panel "Confirmar capas" (importación KMZ) ---------- */
+.kmz-folder-row {
+  background: #26272e; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+}
+.kmz-folder-row .folder-name { font-size: 13px; font-weight: 700; margin-bottom: 1px; }
+.kmz-folder-row .folder-count { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+.kmz-folder-row select {
+  width: 100%; background: #1b1c21; border: 1px solid #34353c; color: var(--text);
+  padding: 8px 10px; border-radius: 8px; font-size: 13px;
+}
+
+/* ---------- Modal centrado (ej. iniciar SET) ---------- */
+.modal-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,.6);
+  z-index: 1400; display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.visible { display: flex; }
+.modal-card {
+  background: var(--dark-2); border-radius: 16px; padding: 22px 20px;
+  width: 100%; max-width: 340px; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.modal-card h2 { font-size: 16px; margin: 0 0 6px; }
+.modal-card p { font-size: 13px; color: var(--text-dim); margin: 0 0 14px; }
+.modal-card input[type="text"] {
+  width: 100%; background: #1b1c21; border: 1px solid #34353c; color: var(--text);
+  padding: 12px 12px; border-radius: 10px; font-size: 15px; font-weight: 600;
+  margin-bottom: 10px; text-transform: uppercase;
+}
+.modal-hint { font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 16px; }

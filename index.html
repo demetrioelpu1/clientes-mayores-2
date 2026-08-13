@@ -20,7 +20,7 @@
       <div class="accent-dot"></div>
       <div class="titles">
         <h1>CATASTRO TÉCNICO-COMERCIAL</h1>
-        <div class="subtitle" id="subtitle-text">Módulo 01 · Mapa de campo</div>
+        <button class="subtitle subtitle-btn" id="btn-set-menu"><span id="subtitle-text">Módulo 01 · Mapa de campo</span> <span class="subtitle-caret">▾</span></button>
       </div>
     </div>
     <div class="gps-pill" id="gps-pill">
@@ -64,6 +64,10 @@
       <div class="fab" id="btn-packs" title="Recortes guardados">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="14" y2="18"></line></svg>
         <div class="badge" id="packs-badge" style="display:none;">0</div>
+      </div>
+      <div class="fab" id="btn-network" title="Red eléctrica base">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="12" cy="18" r="2"></circle><line x1="6.7" y1="7" x2="11.3" y2="16.3"></line><line x1="17.3" y1="7" x2="12.7" y2="16.3"></line><line x1="7" y1="6" x2="17" y2="6"></line></svg>
+        <div class="badge" id="network-badge" style="display:none;">0</div>
       </div>
       <div class="fab" id="btn-locate" title="Toca: activar/seguir GPS. Mantén presionado: apagar GPS.">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>
@@ -163,12 +167,72 @@
     </div>
   </div>
 
+  <!-- ===== Panel: Red eléctrica base ===== -->
+  <div class="sheet-overlay" id="overlay-network">
+    <div class="sheet">
+      <h2>Red eléctrica base <span class="close" data-close="overlay-network">✕</span></h2>
+
+      <button class="btn-outline-danger" id="network-clear-btn" style="width:100%;">🗑 Limpiar red cargada</button>
+
+      <div class="network-load-row">
+        <button class="btn-primary" id="network-load-btn">⬆ Cargar archivo KMZ / KML</button>
+        <button class="btn-secondary" id="network-export-btn">⬇ Descargar datos</button>
+      </div>
+      <input type="file" id="network-file-input" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml" style="display:none" />
+
+      <div class="section-label">CAPAS VISIBLES</div>
+      <div id="network-layers-list"></div>
+
+      <div class="hint-box">
+        Comparte cada KMZ desde WhatsApp hacia esta app (botón Compartir), o
+        guárdalo en el celular y usa "Cargar archivo KMZ / KML" aquí arriba.
+        Cada archivo se SUMA a lo que ya tienes y queda guardado en este
+        celular. Usa "Limpiar red cargada" solo cuando quieras empezar de
+        cero.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Panel: confirmar capas al importar un KMZ/KML ===== -->
+  <div class="sheet-overlay" id="overlay-kmz-map">
+    <div class="sheet">
+      <h2>Confirmar capas <span class="close" data-close="overlay-kmz-map">✕</span></h2>
+      <div class="progress-text" id="kmz-summary" style="text-align:left; margin-bottom:10px;"></div>
+      <div id="kmz-folder-list"></div>
+      <button class="btn-primary" id="kmz-import-confirm-btn" style="width:100%; padding:11px; margin-top:6px;">Importar</button>
+    </div>
+  </div>
+
+  <!-- ===== Panel: menú de la SET actual ===== -->
+  <div class="sheet-overlay" id="overlay-set-menu">
+    <div class="sheet">
+      <h2>SET de trabajo <span class="close" data-close="overlay-set-menu">✕</span></h2>
+      <div class="progress-text" id="set-menu-current" style="text-align:left; margin-bottom:14px;"></div>
+      <button class="btn-secondary" id="set-menu-export-btn" style="width:100%; margin-bottom:8px;">⬇ Descargar información de esta SET</button>
+      <button class="btn-danger" id="set-menu-finish-btn" style="width:100%;">Terminar esta SET y empezar otra</button>
+    </div>
+  </div>
+
+  <!-- ===== Modal: iniciar trabajo (pregunta la SET) ===== -->
+  <div class="modal-overlay" id="overlay-set-start">
+    <div class="modal-card">
+      <h2>Iniciar trabajo</h2>
+      <p>¿Con qué SET desea iniciar?</p>
+      <input type="text" id="set-name-input" placeholder="Ej: SET ANANEA" autocomplete="off" />
+      <div class="modal-hint">Es el nombre de la subestación (SET = Subestación Eléctrica de Transformación) con la que vas a trabajar ahora. Al terminar, podrás descargar la información y empezar otra.</div>
+      <button class="btn-primary" id="set-start-btn" style="width:100%; padding:12px;">Comenzar</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
 <script src="js/vendor/leaflet.js"></script>
+<script src="js/vendor/fflate.js"></script>
 <script src="js/db.js"></script>
 <script src="js/offline-tilelayer.js"></script>
+<script src="js/kmz.js"></script>
+<script src="js/network.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

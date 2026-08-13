@@ -36,6 +36,41 @@ funcionar sin internet una vez descargadas las zonas de trabajo.
 - **Funciona offline como app**: un Service Worker cachea la aplicación en sí
   (HTML/CSS/JS), y un manifest permite "instalarla" en la pantalla de inicio
   del celular.
+- **Flujo de trabajo por SET** (Subestación Eléctrica de Transformación):
+  - Al abrir la app (o después de terminar una SET) aparece "¿Con qué SET
+    desea iniciar?" — se escribe, por ejemplo, `SET ANANEA`, y esa SET queda
+    activa (se muestra en la barra superior).
+  - Tocando el nombre de la SET arriba se abre un menú con "Descargar
+    información de esta SET" y "Terminar esta SET y empezar otra" — esta
+    última descarga automáticamente lo cargado (GeoJSON), limpia la red y
+    vuelve a preguntar el nombre de la siguiente SET, tal como se trabaja en
+    campo: una SET a la vez, se cierra, se pasa a la otra.
+- **Red eléctrica base** (ícono de red, junto al de recortes): panel con 5
+  capas — Postes de Baja Tensión, Postes de Media Tensión, Subestaciones,
+  Tramos de Red MT y Tramos de Red BT — cada una con su color, su contador de
+  elementos y un interruptor para mostrarla u ocultarla en el mapa.
+  - **"Cargar archivo KMZ / KML"**: elige un archivo desde el celular (el que
+    hayas guardado de WhatsApp, Google Earth, etc.). La app lo lee, agrupa
+    los elementos por carpeta y te muestra a qué capa corresponde cada
+    carpeta (adivinado por el nombre — "Postes BT", "TRAFOMIX", "SED", etc. —
+    pero siempre editable antes de importar, y puedes marcar "No importar
+    esta carpeta"). Cada archivo se SUMA a lo que ya había; nada se
+    reemplaza.
+  - **Compartir directo desde WhatsApp**: una vez instalada la app en el
+    celular, el botón "Compartir" de WhatsApp sobre un archivo `.kmz`/`.kml`
+    debería mostrar esta app como destino (usa la Web Share Target API de
+    Android). Lo probé simulando el envío y funciona de punta a punta en el
+    navegador, pero **te recomiendo probarlo una vez en tu celular real**
+    después de instalar la versión actualizada, porque el share-sheet de
+    Android solo se puede verificar en un dispositivo real. Si por algún
+    motivo tu celular no lo ofrece como opción, la alternativa 100% segura es
+    guardar el archivo (desde WhatsApp: ⋮ → Guardar) y usar "Cargar archivo
+    KMZ / KML" dentro de la app.
+  - **"Descargar datos"**: exporta todo lo cargado como un archivo
+    `.geojson` (abrible en QGIS, Google Earth, etc.), nombrado con la SET y
+    la fecha.
+  - **"Limpiar red cargada"**: borra todo lo cargado (con doble toque de
+    confirmación) para empezar una zona nueva.
 
 ## Cómo probarla / publicarla
 
@@ -120,26 +155,31 @@ Service Worker guarda la app para que abra aunque no haya señal.
 ```
 catastro-app/
 ├── index.html          — pantalla principal
+├── share-kmz.html        — destino del botón "Compartir" (Web Share Target)
 ├── manifest.json        — metadata de instalación (PWA)
-├── sw.js                 — Service Worker (cachea la app, no los tiles)
+├── sw.js                 — Service Worker (cachea la app, recibe archivos compartidos)
 ├── css/
 │   ├── app.css            — estilos de la interfaz
 │   ├── leaflet.css         — estilos de Leaflet (vendorizado)
 │   └── images/              — íconos de Leaflet
 ├── js/
-│   ├── app.js              — lógica principal (mapa, capas, descargas, GPS)
-│   ├── db.js                 — acceso a IndexedDB (tiles y recortes)
+│   ├── app.js              — lógica principal (mapa, capas, descargas, GPS, SET, red)
+│   ├── db.js                 — acceso a IndexedDB (tiles, recortes, red eléctrica)
 │   ├── offline-tilelayer.js   — capa de Leaflet con caché offline-first
-│   └── vendor/leaflet.js       — Leaflet 1.9.4 (vendorizado)
+│   ├── kmz.js                  — lector de archivos KMZ/KML
+│   ├── network.js               — definición de las 5 capas de red eléctrica
+│   └── vendor/leaflet.js, fflate.js — librerías vendorizadas
 └── icons/                — íconos de la PWA
 ```
 
 ## Próximos pasos posibles (no incluidos en esta versión)
 
-- Formulario "Nuevo suministro" para registrar puntos en el mapa (como en la
-  captura de referencia), con guardado local y exportación (CSV/GeoJSON).
-- Capas de red eléctrica (postes, líneas, transformadores) como overlays
-  editables.
-- Sincronización con un servidor cuando vuelve la conexión.
+- Formulario "Nuevo suministro" para registrar puntos nuevos en el mapa
+  (como en tu primera captura de referencia), con guardado local.
+- Registrar varias SET guardadas en paralelo (hoy es una a la vez: se
+  termina, se descarga y se limpia antes de pasar a la siguiente, tal como
+  me indicaste que trabajan en campo).
+- Exportar también en formato KML (hoy exporta GeoJSON, que abre en QGIS,
+  Google Earth Pro, geojson.io, etc.).
 
 Si quieres que agregue alguna de estas partes, dímelo y seguimos desde acá.

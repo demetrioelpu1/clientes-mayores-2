@@ -2,10 +2,11 @@
    Los tiles del mapa NO se cachean aquí: eso lo maneja IndexedDB desde app.js/db.js,
    para poder gestionarlos como "recortes" independientes con nombre, borrado, etc. */
 
-const CACHE_NAME = 'catastro-app-shell-v2';
+const CACHE_NAME = 'catastro-app-shell-v3';
 const APP_SHELL = [
   './',
   './index.html',
+  './share-kmz.html',
   './manifest.json',
   './css/app.css',
   './css/leaflet.css',
@@ -17,10 +18,43 @@ const APP_SHELL = [
   './js/app.js',
   './js/db.js',
   './js/offline-tilelayer.js',
+  './js/kmz.js',
+  './js/network.js',
   './js/vendor/leaflet.js',
+  './js/vendor/fflate.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];
+
+/* ---- Base de datos mínima, separada, solo para "entregar" a la app el
+   archivo que llega por el botón Compartir de WhatsApp (Web Share Target).
+   Es independiente de catastro-map-db para no pelear por la versión del
+   esquema entre el Service Worker y la página. ---- */
+const SHARE_DB_NAME = 'catastro-share-handoff';
+const SHARE_STORE = 'pending';
+
+function openShareDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SHARE_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(SHARE_STORE)) {
+        req.result.createObjectStore(SHARE_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function savePendingShare(name, type, buffer) {
+  const db = await openShareDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHARE_STORE, 'readwrite');
+    tx.objectStore(SHARE_STORE).put({ name, type, buffer }, 'latest');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -40,8 +74,36 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/* Cuando el usuario comparte un KMZ/KML desde WhatsApp ("Compartir" → esta
+   app), el navegador hace un POST a share_target.action (share-kmz.html).
+   Lo interceptamos, guardamos el archivo, y redirigimos a la app normal con
+   una señal para que abra el flujo de "Confirmar capas" automáticamente. */
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+
+  if (
+    url.origin === self.location.origin &&
+    event.request.method === 'POST' &&
+    url.pathname.endsWith('/share-kmz.html')
+  ) {
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await event.request.formData();
+          const file = formData.get('kmzfile');
+          if (file && typeof file.arrayBuffer === 'function') {
+            const buffer = await file.arrayBuffer();
+            await savePendingShare(file.name || 'compartido.kmz', file.type || '', buffer);
+            return Response.redirect('./index.html?sharedImport=1', 303);
+          }
+          return Response.redirect('./index.html', 303);
+        } catch (e) {
+          return Response.redirect('./index.html', 303);
+        }
+      })()
+    );
+    return;
+  }
 
   // Solo gestionamos peticiones GET del mismo origen (el app shell).
   // Los tiles de OSM/Esri son cross-origin y los maneja IndexedDB desde app.js.
