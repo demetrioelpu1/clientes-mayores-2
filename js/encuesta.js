@@ -49,7 +49,10 @@ const Encuesta = (() => {
 
   /* ------------------------------------------------------------------ abrir */
 
-  async function abrir(clienteGis) {
+  /* `bloqueId` es opcional: si viene, se abre en ese bloque en vez del primero
+     incompleto. Lo usa la chapita del recorrido — si el técnico tocó la del
+     medidor, quiere el medidor. */
+  async function abrir(clienteGis, bloqueId) {
     await cargarEsquema();
     cliente = clienteGis;
 
@@ -60,7 +63,8 @@ const Encuesta = (() => {
     puntos = await MapDB.getPuntosDeToma(cliente.sed);
 
     autocompletar();
-    indice = primerPasoIncompleto();
+    const pedido = bloqueId ? esquema.bloques.findIndex((b) => b.id === bloqueId) : -1;
+    indice = pedido >= 0 ? pedido : primerPasoIncompleto();
     render();
     AppBridge.openSheet('#overlay-encuesta');
   }
@@ -181,7 +185,10 @@ const Encuesta = (() => {
             <div class="marca-titulo">Ubicación marcada</div>
             <div class="marca-sub">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}${prec}</div>
           </div>
-          <button class="mini" id="btn-marcar">Rehacer</button>
+          <div class="marca-acciones">
+            <button class="mini" id="btn-marcar">Rehacer</button>
+            <button class="mini peligro" id="btn-borrar-marca">Borrar</button>
+          </div>
         </div>`;
     }
     return `
@@ -348,6 +355,14 @@ const Encuesta = (() => {
   function conectar() {
     const btnMarcar = $('#btn-marcar');
     if (btnMarcar) btnMarcar.addEventListener('click', marcarEnMapa);
+
+    const btnBorrar = $('#btn-borrar-marca');
+    if (btnBorrar) btnBorrar.addEventListener('click', async () => {
+      const bloque = esquema.bloques[indice];
+      await Ruta.borrar(cliente.sed, bloque.id);
+      delete puntos[bloque.id];
+      render();
+    });
 
     $('#encuesta-cuerpo').querySelectorAll('[data-campo]').forEach((el) => {
       el.addEventListener('input', () => {

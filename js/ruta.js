@@ -145,8 +145,25 @@ const Ruta = (() => {
     lista.forEach((p) => {
       L.marker([p.lat, p.lon], { icon: icono(p.orden, p.bloque), keyboard: false, zIndexOffset: 700 })
         .bindTooltip(`Punto ${p.orden} · ${p.bloque} · ${p.etiqueta || ''}`, { direction: 'top' })
+        .on('click', () => abrirToma(p))
         .addTo(grupo);
     });
+  }
+
+  /* La chapita es la puerta de entrada a su toma de datos: el técnico la ve en
+     el mapa, la toca y sigue llenando ese equipo. Abre en el bloque del punto
+     que tocó —si tocó la del medidor, arranca en MEDIDOR—, no en el primero
+     incompleto: si tocó ese punto es porque quiere ese equipo. */
+  async function abrirToma(p) {
+    const [slug, alim] = String(p.zona).split('/');
+    const cliente = await Campana.irACliente(slug, alim, p.sed);
+    if (!cliente) {
+      AppBridge.showToast('No encuentro ese equipo en el mapa. Cargá el KMZ de ese alimentador.', 5000);
+      return;
+    }
+    AppBridge.closeSheet('#overlay-cliente');
+    AppBridge.closeSheet('#overlay-campana');
+    await Encuesta.abrir(cliente, p.bloque);
   }
 
   /* -------------------------------------------------------------- marcado */
@@ -230,6 +247,19 @@ const Ruta = (() => {
 
   /* --------------------------------------------------------------- estado */
 
+  /* Borra el punto de un equipo. No pide confirmación a propósito: el número
+     vive en la toma de datos, así que volver a marcar devuelve el mismo. Es
+     reversible en dos toques y en el cerro un diálogo de más estorba. */
+  async function borrar(sed, bloque) {
+    const p = puntos.find((x) => x.sed === sed && x.bloque === bloque);
+    if (!p) return false;
+    await MapDB.deletePuntoRuta(p.id);
+    puntos = puntos.filter((x) => x.id !== p.id);
+    redibujar();
+    AppBridge.showToast(`Punto ${p.orden} borrado. Podés volver a marcarlo.`, 4000);
+    return true;
+  }
+
   async function cargarZona(nuevaZona) {
     zona = nuevaZona;
     puntos = zona ? await MapDB.getRutaDeZona(zona) : [];
@@ -278,7 +308,7 @@ const Ruta = (() => {
   function cuantos() { return puntos.length; }
   function alCambiarPuntos(fn) { alCambiar = fn; }
 
-  return { cargarZona, marcar, cancelarMarcado, marcando, tocoElMapa,
+  return { cargarZona, marcar, borrar, cancelarMarcado, marcando, tocoElMapa,
            alternarVisible, geojson, cuantos, alCambiarPuntos, redibujar };
 })();
 

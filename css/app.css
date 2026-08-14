@@ -525,6 +525,7 @@ html, body {
 }
 .marca-chapa.vacia { background: transparent; color: var(--text-dim); border-color: #3a3b44; }
 .marca-fila .btn-primary { font-size: 12px; padding: 8px 12px; flex-shrink: 0; }
+.marca-acciones { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
 
 /* Con el modo activo, el mapa avisa que el toque deja una marca. */
 .marcando-ruta { cursor: crosshair; }
