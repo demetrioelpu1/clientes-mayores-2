@@ -42,13 +42,19 @@ const XlsxWriter = (() => {
     return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${esc(valor)}</t></is></c>`;
   }
 
-  function fila(n, valores, estilo) {
-    const celdas = valores.map((v, i) => celda(columna(i + 1) + n, v, estilo)).join('');
+  /* `estilos` permite pisar el estilo de celdas sueltas: { indiceColumna: nEstilo } */
+  function fila(n, valores, estilo, estilos) {
+    const celdas = valores
+      .map((v, i) => celda(columna(i + 1) + n, v, (estilos && estilos[i]) || estilo))
+      .join('');
     return `<row r="${n}">${celdas}</row>`;
   }
 
-  /* merges: [{fila, desde, hasta}] con índices de columna en base 1 */
-  function hojaXml({ filas, merges, anchos }) {
+  /* merges: [{fila, desde, hasta}] con índices de columna en base 1
+     enlaces: [{ref, destino}] — ref es la celda ("C5"), destino una ruta
+     relativa al .xlsx. Excel los resuelve contra la carpeta donde está el
+     archivo, así que funcionan una vez que el .zip está descomprimido. */
+  function hojaXml({ filas, merges, anchos, enlaces }) {
     const cols = anchos
       ? `<cols>${anchos.map((a, i) => `<col min="${i + 1}" max="${i + 1}" width="${a}" customWidth="1"/>`).join('')}</cols>`
       : '';
@@ -57,24 +63,40 @@ const XlsxWriter = (() => {
           .map((m) => `<mergeCell ref="${columna(m.desde)}${m.fila}:${columna(m.hasta)}${m.fila}"/>`)
           .join('')}</mergeCells>`
       : '';
+    const links = enlaces && enlaces.length
+      ? `<hyperlinks>${enlaces
+          .map((e, i) => `<hyperlink ref="${e.ref}" r:id="rId${i + 1}"/>`)
+          .join('')}</hyperlinks>`
+      : '';
+    const ns = enlaces && enlaces.length
+      ? ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+      : '';
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"${ns}>
 <sheetViews><sheetView workbookViewId="0"><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
-${cols}<sheetData>${filas.join('')}</sheetData>${fusiones}</worksheet>`;
+${cols}<sheetData>${filas.join('')}</sheetData>${fusiones}${links}</worksheet>`;
+  }
+
+  /* Relaciones de la hoja: un rId por enlace, todos externos. */
+  function relacionesHoja(enlaces) {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${enlaces.map((e, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${esc(e.destino)}" TargetMode="External"/>`).join('')}
+</Relationships>`;
   }
 
   const ESTILOS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>
+<fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><u/><sz val="11"/><color rgb="FF0563C1"/><name val="Calibri"/></font></fonts>
 <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8E8E8"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs>
+<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
 
   /* Devuelve un Uint8Array con el .xlsx listo para descargar. */
-  function crear({ nombreHoja, filas, merges, anchos }) {
+  function crear({ nombreHoja, filas, merges, anchos, enlaces }) {
     const archivos = {
       '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -98,8 +120,12 @@ ${cols}<sheetData>${filas.join('')}</sheetData>${fusiones}</worksheet>`;
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`,
       'xl/styles.xml': ESTILOS,
-      'xl/worksheets/sheet1.xml': hojaXml({ filas, merges, anchos }),
+      'xl/worksheets/sheet1.xml': hojaXml({ filas, merges, anchos, enlaces }),
     };
+
+    if (enlaces && enlaces.length) {
+      archivos['xl/worksheets/_rels/sheet1.xml.rels'] = relacionesHoja(enlaces);
+    }
 
     const entradas = {};
     Object.keys(archivos).forEach((k) => { entradas[k] = fflate.strToU8(archivos[k]); });

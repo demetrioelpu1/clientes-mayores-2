@@ -355,11 +355,29 @@ const Campana = (() => {
      Lo usa el share de WhatsApp: los archivos llegan antes de saber dónde van. */
   let alElegirZona = null;
 
+  /* Si ya hay una zona elegida se abre DIRECTO en su lista de clientes, con la
+     pila armada para poder subir con Atrás. Antes empezaba siempre en
+     "Sistemas" y el técnico tenía que rehacer Azángaro → Ananea → 3001 cada vez
+     que abría el panel, aunque llevara todo el día en ese alimentador.
+
+     `desdeCero` fuerza el arranque en la raíz: lo usa el share de WhatsApp,
+     que necesita que el técnico elija a dónde van los archivos. */
   function abrirSelector(opciones) {
     alElegirZona = (opciones && opciones.alElegirZona) || null;
     pila = [];
     vistaActual = null;
-    ir(getTecnico() ? renderSistemas : renderTecnico);
+
+    const alRaiz = (opciones && opciones.desdeCero) || !getTecnico() || !hayZonaElegida();
+    if (alRaiz) {
+      ir(getTecnico() ? renderSistemas : renderTecnico);
+    } else {
+      const sis = buscarSet(setActual.slug).sistema;
+      pila = [renderSistemas];
+      if (sis.sets.length > 1) pila.push(() => renderSets(sis));
+      pila.push(renderAlimentadores);
+      vistaActual = renderClientes;
+      renderClientes();
+    }
     AppBridge.openSheet('#overlay-campana');
   }
 

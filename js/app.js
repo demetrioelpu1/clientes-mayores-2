@@ -839,7 +839,7 @@
 
     if (!window.Campana || !Campana.hayZonaElegida()) {
       showToast(`${cuantos} recibido(s). Elegí el alimentador donde cargarlos.`, 8000);
-      if (window.Campana) Campana.abrirSelector({ alElegirZona: cargar });
+      if (window.Campana) Campana.abrirSelector({ alElegirZona: cargar, desdeCero: true });
       return;
     }
     showToast(`${cuantos} recibido(s) desde Compartir. Cargando…`, 3000);

@@ -138,7 +138,9 @@ const Resultados = (() => {
     return v;
   }
 
-  function construirLibro(todas) {
+  /* `conFotos` solo es true en el paquete .zip: en el Excel suelto los enlaces
+     apuntarían a una carpeta que no está y darían error al tocarlos. */
+  function construirLibro(todas, conFotos) {
     const cols = esquema.exportacion.columnas;
 
     // Fila 1: grupos (TRAFOMIX, SISTEMA DE MEDICIÓN, …) fusionados.
@@ -158,8 +160,22 @@ const Resultados = (() => {
       XlsxWriter.fila(2, cols.map((c) => c.header), 1),
     ];
 
+    /* El nombre del cliente lleva el enlace a su carpeta de fotos. Va en una
+       columna que ya existe: agregar una 49.ª rompería el formato de Ananea. */
+    const colNombre = cols.findIndex((c) => c.origen === 'gis.nombre');
+    const enlaces = [];
+
     todas.forEach((e, n) => {
-      filas.push(XlsxWriter.fila(n + 3, cols.map((c) => valorDe(e, c, n + 1))));
+      const valores = cols.map((c) => valorDe(e, c, n + 1));
+      const estilos = {};
+      if (conFotos && colNombre >= 0 && Object.keys(e.fotos || {}).length) {
+        estilos[colNombre] = 2;                       // azul subrayado
+        enlaces.push({
+          ref: XlsxWriter.columna(colNombre + 1) + (n + 3),
+          destino: `fotos/${nombreCarpeta(e)}/`,
+        });
+      }
+      filas.push(XlsxWriter.fila(n + 3, valores, null, estilos));
     });
 
     const anchos = cols.map((c) => Math.min(38, Math.max(12, c.header.length + 3)));
@@ -168,6 +184,7 @@ const Resultados = (() => {
       filas,
       merges,
       anchos,
+      enlaces,
     });
   }
 
@@ -201,6 +218,13 @@ const Resultados = (() => {
   }
 
   /* Carpeta por cliente, con el nombre de la foto tal como lo pide el formato. */
+  /* Lo que identifica al equipo en un nombre de archivo: el código de ruta que
+     el técnico leyó de la etiqueta pegada, y si no lo escribió, la clave. */
+  function identificador(e) {
+    const ruta = (e.datos.cliente || {}).codigo_ruta;
+    return String(ruta || e.sed).replace(/[\\/:*?"<>|]/g, '-').slice(0, 30);
+  }
+
   function nombreCarpeta(e) {
     const ruta = (e.datos.cliente || {}).codigo_ruta;
     const base = ruta ? `${ruta} - ${e.nombre || e.sed}` : (e.nombre || e.sed);
@@ -224,7 +248,7 @@ const Resultados = (() => {
 
     AppBridge.showToast('Armando el paquete…', 8000);
     const entradas = {};
-    entradas[`${nombreBase(todas)}.xlsx`] = construirLibro(todas);
+    entradas[`${nombreBase(todas)}.xlsx`] = construirLibro(todas, true);
 
     let nFotos = 0;
     for (const e of todas) {
@@ -235,7 +259,10 @@ const Resultados = (() => {
         if (!blob) continue;
         const { n, label } = etiquetaFoto(bloqueId, fotoId);
         const limpio = label.replace(/[\\/:*?"<>|]/g, '-');
-        const nombre = `fotos/${carpeta}/${bloqueId} ${String(n).padStart(2, '0')} ${limpio}.jpg`;
+        /* El nombre del archivo lleva el identificador del equipo además de la
+           carpeta: si una foto se saca de su carpeta —se reenvía suelta por
+           WhatsApp, se copia a otro lado— tiene que seguir diciendo de quién es. */
+        const nombre = `fotos/${carpeta}/${identificador(e)} - ${bloqueId} ${String(n).padStart(2, '0')} ${limpio}.jpg`;
         entradas[nombre] = new Uint8Array(await blob.arrayBuffer());
         nFotos++;
       }
