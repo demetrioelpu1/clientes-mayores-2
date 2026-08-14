@@ -261,9 +261,17 @@ html, body {
 
 .toast {
   position: absolute; left: 50%; bottom: 100px; transform: translateX(-50%);
-  background: #26272e; color: var(--text); padding: 9px 16px; border-radius: 20px;
+  background: #26272e; color: var(--text); padding: 10px 16px; border-radius: 16px;
   font-size: 12.5px; z-index: 1300; box-shadow: 0 4px 14px rgba(0,0,0,.4);
   opacity: 0; pointer-events: none; transition: opacity .25s;
+  /* Con `left: 50%`, el ancho disponible para ajustarse es solo la mitad
+     derecha de la pantalla: un aviso largo quedaba en una columna de 188 px y
+     147 px de alto. `max-content` le deja pedir lo que necesita y el tope lo
+     frena antes del borde. Se vio en la primera prueba en celular. */
+  width: max-content;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  line-height: 1.45;
 }
 .toast.visible { opacity: 1; }
 
@@ -454,6 +462,31 @@ html, body {
   justify-content: center;
 }
 .marcador-sed svg { overflow: visible; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+
+/* Cabecera del alimentador: va rotulada con su código, porque en campo nadie
+   pasa el dedo por encima para leer un tooltip. Cian, que no lo usa ninguna
+   otra capa: rojo son los tramos, gris la SED, y los clientes van en
+   amarillo/naranja/verde según el estado de la toma de datos. */
+.marcador-cabecera {
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.marcador-cabecera span {
+  background: var(--accent-cyan);
+  color: #04302e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 2px solid #ffffff;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,.45);
+}
 
 /* ---------- Panel semitransparente: deja ver el mapa detrás ----------
    Solo el panel de zona de trabajo y la ficha; los demás quedan opacos
@@ -829,19 +862,6 @@ button.mini.peligro { color: #f0645a; border-color: rgba(240,100,90,.4); }
   margin-left: 4px;
   vertical-align: middle;
 }
-
-/* ---------- Referencia del GIS bajo cada campo ---------- */
-.campo-gis {
-  font-size: 10.5px;
-  line-height: 1.4;
-  margin-top: 5px;
-  padding-left: 2px;
-  color: var(--text-dim);
-}
-.campo-gis.vacio { opacity: .55; font-style: italic; }
-.campo-gis.igual { color: var(--green); }
-.campo-gis.distinto { color: var(--accent); font-weight: 600; }
-.paso-progreso .dif { color: var(--accent); }
 
 /* ---------- Botón de carga de KMZ y su estado ---------- */
 .btn-cargar {

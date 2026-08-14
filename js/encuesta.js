@@ -237,74 +237,22 @@ const Encuesta = (() => {
                data-bloque="${bloque.id}" data-campo="${campo.id}"
                placeholder="${campo.placeholder || ''}"
                value="${v.replace(/"/g, '&quot;')}" />
-        ${renderReferencia(campo, v)}
       </div>`;
   }
 
   /* --------------------------------------------------- referencia del GIS
 
-     A propósito NO se rellena el campo con el dato del GIS: el técnico escribe
-     lo que ve en la placa y la app marca si no coincide. Si viniera rellenado,
-     bastaría con tocar "Siguiente" para que la campaña devolviera exactamente
-     lo que ya estaba registrado, que es justo lo que se quiere verificar. */
+     RETIRADA (14/08/2026). El formulario mostraba el dato del GIS debajo de cada
+     input y marcaba "coincide / NO coincide", y esas diferencias se guardaban
+     para exportarlas.
 
-  function valorGis(campo) {
-    if (!campo.gis || !cliente.gis) return null;
-    const v = cliente.gis[campo.gis];
-    return v === undefined || v === '' ? null : String(v);
-  }
+     Ya no: lo que el GIS tiene son lecturas viejas, y la campaña es una
+     verificación nueva, no una auditoría contra el GIS. El técnico lectura la
+     placa y eso es el dato. Mostrar el valor viejo al lado del campo solo
+     inducía a copiarlo.
 
-  function coincide(escrito, gis) {
-    const norm = (x) => String(x).trim().toLowerCase().replace(',', '.');
-    if (norm(escrito) === norm(gis)) return true;
-    const a = Number(norm(escrito));
-    const b = Number(norm(gis));
-    return Number.isFinite(a) && Number.isFinite(b) && a === b;
-  }
-
-  function renderReferencia(campo, valor) {
-    if (!campo.gis || !cliente.gis) return '';
-    const gis = valorGis(campo);
-    if (gis === null) {
-      return `<div class="campo-gis vacio" data-gis-de="${campo.id}">Sin dato en el GIS</div>`;
-    }
-    return `<div class="campo-gis ${claseGis(valor, gis)}" data-gis-de="${campo.id}">${textoGis(valor, gis)}</div>`;
-  }
-
-  function claseGis(valor, gis) {
-    if (!String(valor).trim()) return '';
-    return coincide(valor, gis) ? 'igual' : 'distinto';
-  }
-
-  function textoGis(valor, gis) {
-    if (!String(valor).trim()) return `GIS: ${gis}`;
-    return coincide(valor, gis) ? `GIS: ${gis} · coincide` : `GIS: ${gis} · NO coincide`;
-  }
-
-  function actualizarReferencia(el, campo) {
-    const caja = el.parentElement.querySelector('[data-gis-de]');
-    if (!caja || !campo.gis) return;
-    const gis = valorGis(campo);
-    if (gis === null) return;
-    caja.className = `campo-gis ${claseGis(el.value, gis)}`;
-    caja.textContent = textoGis(el.value, gis);
-  }
-
-  /* Cuántos campos difieren del GIS: es el resultado que importa de la campaña. */
-  function diferencias() {
-    if (!cliente.gis) return [];
-    const out = [];
-    pasos.forEach(({ bloque, paso }) => {
-      (paso.campos || []).forEach((campo) => {
-        const gis = valorGis(campo);
-        if (gis === null) return;
-        const escrito = (datos[bloque.id] || {})[campo.id];
-        if (!escrito || !String(escrito).trim()) return;
-        if (!coincide(escrito, gis)) out.push({ campo: campo.label, gis, escrito });
-      });
-    });
-    return out;
-  }
+     La clave `gis` del esquema se mantiene, pero ahora su único uso es que
+     `camposQuePregunta()` sepa qué NO mostrar en la ficha del cliente. */
 
   function renderFoto(bloque, foto) {
     const clave = `${bloque.id}/${foto.id}`;
@@ -321,18 +269,11 @@ const Encuesta = (() => {
   /* ----------------------------------------------------------------- eventos */
 
   function conectar() {
-    const defs = {};
-    esquema.bloques[indice].pasos.forEach((paso) => {
-      (paso.campos || []).forEach((c) => { defs[c.id] = c; });
-    });
-
     $('#encuesta-cuerpo').querySelectorAll('[data-campo]').forEach((el) => {
       el.addEventListener('input', () => {
         const b = el.dataset.bloque;
         datos[b] = datos[b] || {};
         datos[b][el.dataset.campo] = el.value;
-        const campo = defs[el.dataset.campo];
-        if (campo) actualizarReferencia(el, campo);
         actualizarProgreso();
         guardar();
       });
@@ -446,10 +387,8 @@ const Encuesta = (() => {
       campos += c.llenos; camposTotal += c.total;
       fotosOk += c.fotos; fotosTotal += c.totalFotos;
     });
-    const dif = diferencias().length;
-    $('#encuesta-progreso').innerHTML =
-      `${campos}/${camposTotal} campos · ${fotosOk}/${fotosTotal} fotos`
-      + (dif ? ` · <b class="dif">${dif} ${dif === 1 ? 'diferencia' : 'diferencias'} con el GIS</b>` : '');
+    $('#encuesta-progreso').textContent =
+      `${campos}/${camposTotal} campos · ${fotosOk}/${fotosTotal} fotos`;
     // El contador del bloque activo vive en la cabecera: hay que refrescarlo
     // en cada tecla, no solo al cambiar de bloque.
     if (esquema && $('#bloque-actual')) {
@@ -482,9 +421,6 @@ const Encuesta = (() => {
       actualizado: new Date().toISOString(),
       datos,
       fotos,
-      // Se guardan para poder reportarlas después sin recalcular ni volver a
-      // necesitar el paquete del GIS, que puede haberse borrado o cambiado.
-      diferencias: diferencias(),
     };
   }
 
@@ -525,7 +461,28 @@ const Encuesta = (() => {
     return falta;
   }
 
-  return { abrir, cerrar, faltantes, estadoActual, irA, diferencias, alternarSelector,
+  /* Claves del GIS que el formulario va a preguntar. La ficha del cliente las
+     usa para NO mostrarlas: son lecturas viejas del GIS y verlas antes de medir
+     induce a copiarlas, que es justo lo que la campaña viene a evitar. Sale del
+     esquema y no de una lista a mano, así una columna nueva se oculta sola. */
+  let preguntados = null;
+
+  async function camposQuePregunta() {
+    if (preguntados) return preguntados;
+    await cargarEsquema();
+    const claves = new Set();
+    esquema.bloques.forEach((bloque) => bloque.pasos.forEach((paso) => {
+      (paso.campos || []).forEach((campo) => {
+        if (campo.id) claves.add(campo.id);
+        if (campo.gis) claves.add(campo.gis);
+      });
+    }));
+    preguntados = claves;
+    return claves;
+  }
+
+  return { abrir, cerrar, faltantes, estadoActual, irA, alternarSelector,
+           camposQuePregunta,
            siguiente: () => irA(indice + 1), atras: () => irA(indice - 1),
            pasoActual: () => indice, totalPasos: () => (esquema ? esquema.bloques.length : 0) };
 })();
@@ -538,13 +495,9 @@ document.querySelector('#encuesta-siguiente').addEventListener('click', async ()
     return;
   }
   const falta = Encuesta.faltantes();
-  const dif = Encuesta.diferencias();
   await Encuesta.cerrar();
-  const aviso = dif.length
-    ? ` · ${dif.length} diferencia(s) con el GIS: ${dif.map((d) => d.campo).join(', ')}`
-    : '';
-  if (!falta.length) AppBridge.showToast(`Toma de datos completa y guardada${aviso}`, 4500);
-  else AppBridge.showToast(`Guardado. Falta — ${falta.join(' · ')}${aviso}`, 5500);
+  if (!falta.length) AppBridge.showToast('Toma de datos completa y guardada', 4000);
+  else AppBridge.showToast(`Guardado. Falta — ${falta.join(' · ')}`, 5500);
 });
 
 document.querySelector('#encuesta-atras').addEventListener('click', () => Encuesta.atras());

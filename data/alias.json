@@ -1,4 +1,5 @@
 {
+"global": {
 "codigo sed": "sed",
 "mt sed codigo": "sed",
 "etiqueta sed": "sed_etiqueta",
@@ -23,6 +24,7 @@
 "sed codigo": "sed",
 "codigo estructura mt": "estructura",
 "codigo estructura bt": "estructura",
+"codigo de tramo": "tramo",
 "codigo de tramo de mt": "tramo",
 "codigo tramo mt": "tramo",
 "codigo tramo de linea": "tramo",
@@ -100,4 +102,15 @@
 "intensidad potencia": "potencia_corriente",
 "trafomix clase": "clase",
 "altura m s n m": "altura_msnm"
+},
+"porCapa": {
+"alimentador": {
+"codigo de alimentador": "alimentador_id",
+"codigo de sallida de mt": "alimentador",
+"codigo de salida de mt": "alimentador",
+"nombre de la salida mt": "nombre_salida",
+"potencia nominal": "potencia_nominal",
+"potencia contratada kw": "potencia_contratada_kw"
+}
+}
 }

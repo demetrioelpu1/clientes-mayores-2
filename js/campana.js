@@ -17,11 +17,12 @@ const Campana = (() => {
   const CLAVE_ALIM = 'catastro:campana:alimentador';
   const CLAVE_TECNICO = 'catastro:tecnico';
 
-  const CAPAS = ['tramos_mt', 'trafomix', 'sed'];
+  const CAPAS = ['tramos_mt', 'trafomix', 'sed', 'alimentador'];
   const NOMBRE_CAPA = {
     tramos_mt: 'Tramos MT',
     trafomix: 'Trafomix',
     sed: 'SED',
+    alimentador: 'Cabecera',
   };
 
   const COLOR = {
@@ -34,6 +35,23 @@ const Campana = (() => {
 
   /* La SED va en triángulo (pedido del ingeniero): es la convención del GIS y
      así no se confunde con los círculos, que son los clientes mayores. */
+  /* La cabecera es la celda de salida MT dentro de la subestación: donde
+     arranca el alimentador y desde donde el técnico sigue la red. Se dibuja
+     rotulada con su código porque en el celular nadie pasa el mouse por encima
+     para ver un tooltip. Va en cian, que no lo usa ninguna otra capa.
+
+     Solo se dibuja la del alimentador activo, y es a propósito: las 6 cabeceras
+     de Ananea están todas en el mismo patio, separadas por 10-30 m, así que
+     dibujarlas juntas daría una mancha ilegible salvo al zoom máximo. */
+  function iconoCabecera(codigo) {
+    return L.divIcon({
+      className: 'marcador-cabecera',
+      html: `<span>${codigo}</span>`,
+      iconSize: [52, 22],
+      iconAnchor: [26, 11],
+    });
+  }
+
   const ICONO_SED = L.divIcon({
     className: 'marcador-sed',
     html: '<svg viewBox="0 0 20 18" width="20" height="18" aria-hidden="true">'
@@ -54,6 +72,7 @@ const Campana = (() => {
   let grupos = {};
   let grupoClientes = null;
   let marcadores = {};
+  let cabecera = null;         // latlng de la celda de salida del alimentador
   let capaCargando = null;     // capa que espera el archivo del selector
 
   const $ = (sel) => document.querySelector(sel);
@@ -185,9 +204,12 @@ const Campana = (() => {
   function redibujar() {
     limpiarMapa();
 
+    /* Los tramos MT son contexto, no objetivo: el técnico no los inspecciona,
+       le sirven para ubicarse. En el 3001 son 555 líneas y a pleno color tapan
+       a los clientes, que es lo único que hay que ir a visitar. */
     if ((capas.tramos_mt || []).length) {
       grupos.tramos_mt = L.geoJSON(fc(capas.tramos_mt), {
-        style: { color: COLOR.tramos_mt, weight: 3, opacity: 0.85 },
+        style: { color: COLOR.tramos_mt, weight: 2, opacity: 0.45 },
         onEachFeature: (f, capa) =>
           capa.bindTooltip(`Tramo MT ${f.properties.tramo || ''} · ${f.properties.tension_kv || '—'} kV`,
             { direction: 'top' }),
@@ -206,11 +228,36 @@ const Campana = (() => {
       }).addTo(map());
     }
 
+    cabecera = null;
+    if ((capas.alimentador || []).length) {
+      grupos.alimentador = L.geoJSON(fc(capas.alimentador), {
+        pointToLayer: (f, latlng) => {
+          cabecera = latlng;
+          return L.marker(latlng, {
+            icon: iconoCabecera(f.properties.alimentador || alimentador || '—'),
+            keyboard: false,
+            zIndexOffset: 500,        // por encima de SED y clientes
+          });
+        },
+        onEachFeature: (f, capa) => capa.on('click', () => abrirFichaCabecera(f.properties)),
+      }).addTo(map());
+    }
+
+    /* Lo ya hecho se apaga y lo que falta queda brillante: en un alimentador de
+       64 clientes, lo que el técnico necesita ver de un vistazo es qué le queda.
+       El borrador NO se apaga — es trabajo a medio terminar, y esconderlo sería
+       la forma más fácil de que se olvide de volver. Los completos siguen
+       visibles y clickeables para poder revisarlos. */
     grupoClientes = L.layerGroup().addTo(map());
     clientes.forEach((c) => {
+      const hecho = estadoDe(c) === 'completa';
       const m = L.circleMarker([c.lat, c.lon], {
-        radius: 9, weight: 3, color: '#ffffff',
-        fillColor: COLOR[estadoDe(c)], fillOpacity: 1,
+        radius: hecho ? 7 : 9,
+        weight: hecho ? 2 : 3,
+        color: '#ffffff',
+        opacity: hecho ? 0.45 : 1,
+        fillColor: COLOR[estadoDe(c)],
+        fillOpacity: hecho ? 0.35 : 1,
       });
       m.bindTooltip(`${c.etiqueta || c.sed}${c.nombre ? ' · ' + c.nombre : ''}`, { direction: 'top' });
       m.on('click', () => abrirFicha(c.sed));
@@ -492,7 +539,7 @@ const Campana = (() => {
            <span class="carga-tilde">✓</span>
            <div>
              <div class="carga-titulo">Datos cargados</div>
-             <div class="carga-sub">Las tres capas de este alimentador están listas</div>
+             <div class="carga-sub">Las ${CAPAS.length} capas de este alimentador están listas</div>
            </div>
            <button class="mini" id="btn-cargar-kmz">Agregar</button>
          </div>`
@@ -501,13 +548,22 @@ const Campana = (() => {
            <span>Cargar KMZ · falta ${faltan.map((c) => NOMBRE_CAPA[c]).join(', ')}</span>
          </button>`;
 
+    // Solo aparece si la cabecera está cargada: es el punto desde donde el
+    // técnico arranca el recorrido del alimentador.
+    const botonInicio = cabecera
+      ? '<button class="btn-secondary" id="btn-ir-inicio" style="width:100%;margin-bottom:10px;">'
+        + `📍 Ir al inicio del alimentador ${alimentador}</button>`
+      : '';
+
     pintar(`Clientes mayores (${hechos}/${total})`, migas, `
       <div class="capa-tira">${tira}</div>
       ${botonCarga}
+      ${botonInicio}
       ${filas || '<div class="campana-vacio">No hay clientes mayores cargados en este alimentador.</div>'}`);
     conectarMigas();
 
     $('#btn-cargar-kmz').addEventListener('click', () => pedirArchivos(null));
+    if (cabecera) $('#btn-ir-inicio').addEventListener('click', irAlInicio);
     $('#campana-cuerpo').querySelectorAll('[data-capa]').forEach((el) => {
       el.addEventListener('click', () => ir(() => renderCargas(el.dataset.capa)));
     });
@@ -639,21 +695,29 @@ const Campana = (() => {
     actualizarSubtitulo();
     refrescarVista();
 
-    if (avisos.length) AppBridge.showToast(avisos.join(' · '), 6000);
+    // Los avisos de error explican qué hacer y son largos: hay que darle tiempo
+    // a leerlos, sobre todo con el celular al sol y una mano ocupada.
+    if (avisos.length) AppBridge.showToast(avisos.join(' · '), 9000);
     else AppBridge.showToast(`${importados} archivo(s) cargado(s)`, 3000);
   }
 
   /* ----------------------------------------------------------- ficha cliente */
 
+  /* Lo que la ficha muestra del trafomix es solo lo que sirve para IDENTIFICAR
+     el equipo y llegar hasta él. Serie, marca, modelo, año, relaciones y
+     potencias salieron a propósito: son lecturas viejas del GIS y son
+     exactamente lo que el técnico va a levantar de nuevo. Si se ven antes de
+     medir, se copian, y la campaña deja de tener sentido. */
   const ETIQUETAS = {
     trafomix: 'Código Trafomix', sed: 'Código SED', etiqueta: 'Etiqueta',
-    serie: 'Serie', marca: 'Marca', modelo: 'Modelo',
-    tipo_trafomix: 'Tipo', fases: 'Fases', anio_fabricacion: 'Año de fabricación',
-    relacion_tension: 'Relación de tensión', relacion_corriente: 'Relación de corriente',
-    potencia_tension: 'Potencia en tensión', potencia_corriente: 'Potencia en corriente',
+    tipo_trafomix: 'Tipo', fases: 'Fases',
     estructura: 'Estructura', tramo: 'Tramo MT', localidad: 'Localidad',
     propietario: 'Propietario', potencia_kva: 'Potencia (kVA)', direccion: 'Dirección',
   };
+
+  /* Red de seguridad: si el ingeniero agrega una columna al formulario y esa
+     clave todavía figura arriba, se oculta sola. Se carga en iniciar(). */
+  let camposDelFormulario = new Set();
 
   /* Los campos de la SED que pidió el ingeniero, en su orden. Vienen los 11 en
      el 100% de los registros de Ananea, salvo "etiqueta anterior" (100/118). */
@@ -673,10 +737,39 @@ const Campana = (() => {
 
   function filasDe(fuente, etiquetas) {
     return Object.keys(etiquetas)
+      .filter((k) => !camposDelFormulario.has(k))
       .filter((k) => fuente[k] !== undefined && fuente[k] !== '')
       .map((k) => `<div class="ficha-fila"><span>${etiquetas[k]}</span>`
         + `<strong>${esc(fuente[k])}</strong></div>`)
       .join('');
+  }
+
+  /* Datos de la cabecera que sirven en campo. "Max. Demanda Registrada" no está
+     mapeada a propósito: los valores no son coherentes entre alimentadores y el
+     ingeniero pidió ignorar ese dato. */
+  const ETIQUETAS_CABECERA = {
+    alimentador: 'Salida MT', nombre_salida: 'Nombre de la salida',
+    set: 'Centro de transformación', tension_kv: 'Tensión nominal (kV)',
+    potencia_nominal: 'Potencia nominal', fases: 'Fases',
+    tramo: 'Primer tramo MT', sistema: 'Código de sistema eléctrico',
+    alimentador_id: 'Código GIS del alimentador',
+  };
+
+  function abrirFichaCabecera(p) {
+    $('#cliente-nombre').textContent = `Cabecera ${p.alimentador || alimentador || ''}`;
+    $('#cliente-sub').textContent = 'Celda de salida MT · inicio del alimentador';
+    $('#cliente-cuerpo').innerHTML = filasDe(p, ETIQUETAS_CABECERA);
+    $('#cliente-ir-btn').hidden = false;
+    $('#cliente-ir-btn').onclick = irAlInicio;
+    $('#cliente-encuesta-btn').hidden = true;
+    AppBridge.openSheet('#overlay-cliente');
+  }
+
+  function irAlInicio() {
+    if (!cabecera) return;
+    AppBridge.closeSheet('#overlay-cliente');
+    AppBridge.closeSheet('#overlay-campana');
+    map().setView(cabecera, 17);
   }
 
   /* Ficha de una SED: es solo consulta, acá no se toma ningún dato — lo que se
@@ -770,6 +863,9 @@ const Campana = (() => {
     }
     try { estados = await MapDB.getEstadosEncuestas(); }
     catch (e) { console.warn('No se pudieron leer los estados:', e); estados = {}; }
+
+    try { camposDelFormulario = await Encuesta.camposQuePregunta(); }
+    catch (e) { console.warn('No se pudo leer el esquema del formulario:', e); }
 
     const slug = localStorage.getItem(CLAVE_SET);
     const alim = localStorage.getItem(CLAVE_ALIM);

@@ -29,12 +29,14 @@ const KmzParser = (() => {
     ['tramos bt', 'tramos_bt', 'LineString'],
     ['postes mt', 'postes_mt', 'Point'],
     ['postes bt', 'postes_bt', 'Point'],
+    ['alimentador', 'alimentador', 'Point'],
     ['sed', 'sed', 'Point'],
   ];
 
   const NOMBRE_CAPA = {
     trafomix: 'Trafomix',
     sed: 'Subestaciones (SED)',
+    alimentador: 'Cabecera del alimentador',
     tramos_mt: 'Tramos de Red MT',
     tramos_bt: 'Tramos de Red BT',
     postes_mt: 'Postes de Media Tensión',
@@ -44,9 +46,12 @@ const KmzParser = (() => {
   async function cargarAlias() {
     if (alias) return alias;
     try {
-      alias = await (await fetch('data/alias.json')).json();
+      const json = await (await fetch('data/alias.json')).json();
+      // { global, porCapa }: hay rótulos que significan cosas distintas según
+      // la capa (ver ALIAS_POR_CAPA en tools/kmz_to_geojson.py).
+      alias = { global: json.global || {}, porCapa: json.porCapa || {} };
     } catch (e) {
-      alias = {};   // sin alias igual funciona, solo quedan los nombres crudos
+      alias = { global: {}, porCapa: {} };   // sin alias quedan los nombres crudos
     }
     return alias;
   }
@@ -81,9 +86,10 @@ const KmzParser = (() => {
   }
 
   /* Saca los pares campo/valor de la tabla HTML del <description>. */
-  function atributosDe(descripcion) {
+  function atributosDe(descripcion, capa) {
     const datos = {};
     let adjuntos = 0;
+    const propios = (alias.porCapa || {})[capa] || {};
     const html = desescapar(descripcion);
     RE_TR.lastIndex = 0;
     let fila;
@@ -100,7 +106,8 @@ const KmzParser = (() => {
       if (celdas.length !== 2) continue;
       const [etiqueta, valor] = celdas;
       if (!etiqueta) continue;
-      const clave = alias[slug(etiqueta)] || slug(etiqueta).replace(/ /g, '_');
+      const s = slug(etiqueta);
+      const clave = propios[s] || alias.global[s] || s.replace(/ /g, '_');
       if (datos[clave] === undefined && valor !== '') datos[clave] = valor;
     }
     return { datos, adjuntos };
@@ -132,12 +139,42 @@ const KmzParser = (() => {
     return null;
   }
 
+  /* Android no entrega el archivo, entrega un puntero a un "proveedor de
+     documentos". Si el técnico lo eligió desde Drive, desde el chat de WhatsApp
+     o desde la lista de Recientes, ese puntero puede no tener el archivo de
+     verdad en el teléfono, y la lectura falla acá — antes de parsear nada.
+
+     Chrome tira "A requested file or directory could not be found at the time
+     an operation was processed", en inglés y sin decir qué hacer. Pasó en la
+     primera prueba en un celular real (14/08/2026). */
+  async function bytesDe(file) {
+    try {
+      return new Uint8Array(await file.arrayBuffer());
+    } catch (e) {
+      if (e && (e.name === 'NotFoundError' || e.name === 'NotReadableError')) {
+        throw new Error('el teléfono no pudo abrir el archivo. Si lo elegiste '
+          + 'desde Drive, WhatsApp o Recientes, descargalo primero a Descargas '
+          + 'y volvé a intentar desde ahí.');
+      }
+      throw e;
+    }
+  }
+
   async function textoKml(file) {
-    const buf = new Uint8Array(await file.arrayBuffer());
+    const buf = await bytesDe(file);
     const esZip = buf.length > 4 && buf[0] === 0x50 && buf[1] === 0x4b;   // "PK"
     if (!esZip) return new TextDecoder('utf-8').decode(buf);
-    const contenido = fflate.unzipSync(buf);
-    const nombre = Object.keys(contenido).find((n) => n.toLowerCase().endsWith('.kml'));
+
+    /* Se descomprime SOLO el .kml. Los KMZ de SED traen los PDFs del GIS
+       adentro: `15 3004 SED.kmz` son 16,9 MB de los cuales 16,5 son adjuntos
+       que la app únicamente cuenta. Sin este filtro, unzipSync los expandía a
+       todos en memoria para tirarlos enseguida, y ese pico es lo que tumba la
+       pestaña en un Android de gama baja. El ingeniero no puede exportar sin
+       los adjuntos, así que el filtro es la única defensa. */
+    const contenido = fflate.unzipSync(buf, {
+      filter: (f) => f.name.toLowerCase().endsWith('.kml'),
+    });
+    const nombre = Object.keys(contenido)[0];
     if (!nombre) throw new Error('El .kmz no contiene ningún .kml adentro.');
     return new TextDecoder('utf-8').decode(contenido[nombre]);
   }
@@ -171,7 +208,7 @@ const KmzParser = (() => {
       const geometry = geometriaDe(xml);
       if (!geometry) { sinGeometria++; continue; }
       const desc = /<description>([\s\S]*?)<\/description>/.exec(xml);
-      const { datos, adjuntos: n } = desc ? atributosDe(desc[1]) : { datos: {}, adjuntos: 0 };
+      const { datos, adjuntos: n } = desc ? atributosDe(desc[1], capa) : { datos: {}, adjuntos: 0 };
       adjuntos += n;
       elementos.push({ type: 'Feature', geometry, properties: datos });
     }
