@@ -37,7 +37,7 @@ const Encuesta = (() => {
 
   async function cargarEsquema() {
     if (esquema) return esquema;
-    const res = await fetch('data/encuesta.json');
+    const res = await fetch(rutaData('encuesta.json'));
     if (!res.ok) throw new Error('No se encontró data/encuesta.json');
     esquema = await res.json();
     pasos = [];
@@ -63,6 +63,9 @@ const Encuesta = (() => {
     puntos = await MapDB.getPuntosDeToma(cliente.sed);
 
     autocompletar();
+    // Siempre se abre desplegado, aunque la vez anterior se hubiera minimizado.
+    document.querySelector('#overlay-encuesta').classList.remove('minimizado');
+    document.querySelector('#overlay-encuesta .sheet').classList.remove('minimizada');
     const pedido = bloqueId ? esquema.bloques.findIndex((b) => b.id === bloqueId) : -1;
     indice = pedido >= 0 ? pedido : primerPasoIncompleto();
     render();
@@ -164,15 +167,42 @@ const Encuesta = (() => {
     bloque.pasos.forEach((paso) => { if (paso.fotos) pintarFotosGuardadas(bloque, paso); });
   }
 
-  /* Los tres equipos que se visitan físicamente llevan su punto en el mapa. El
-     cliente y las observaciones no: no son un lugar al que se camina. */
+  /* Los lugares a los que el técnico camina. El cliente y las observaciones no
+     lo son, así que no llevan punto.
+
+     El MEDIDOR no tiene punto propio: en campo está en el mismo poste que el
+     trafomix, así que marcarlo dos veces sería marcar el mismo lugar. Su bloque
+     muestra el punto del trafomix como referencia. */
   const BLOQUES_CON_PUNTO = {
-    trafomix: 'el trafomix',
-    medidor: 'el sistema de medición',
+    trafomix: 'el trafomix y su medidor',
     transformador: 'el transformador',
   };
+  const COMPARTE_PUNTO = { medidor: 'trafomix' };
 
   function renderMarca(bloque) {
+    const comparte = COMPARTE_PUNTO[bloque.id];
+    if (comparte) {
+      const p = puntos[comparte];
+      if (!p) {
+        return `
+          <div class="marca-fila">
+            <span class="marca-chapa vacia">${orden}</span>
+            <div class="marca-texto">
+              <div class="marca-titulo">Se marca junto con el trafomix</div>
+              <div class="marca-sub">El medidor está en el mismo poste: se ubica una sola vez</div>
+            </div>
+          </div>`;
+      }
+      return `
+        <div class="marca-fila marcada">
+          <span class="marca-chapa">${orden}</span>
+          <div class="marca-texto">
+            <div class="marca-titulo">Ubicado con el trafomix</div>
+            <div class="marca-sub">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}</div>
+          </div>
+        </div>`;
+    }
+
     const que = BLOQUES_CON_PUNTO[bloque.id];
     if (!que) return '';
     const p = puntos[bloque.id];
@@ -517,6 +547,12 @@ const Encuesta = (() => {
       actualizado: new Date().toISOString(),
       datos,
       fotos,
+      // Un equipo que el técnico encontró y el GIS no tiene: su registro es lo
+      // único que lo hace existir, así que lleva su ubicación encima.
+      ...(cliente.nuevo
+        ? { nuevo: true, tipo: cliente.tipo || 'trafomix', lat: cliente.lat, lon: cliente.lon,
+            sistema: cliente.sistema || '' }
+        : {}),
     };
   }
 
@@ -619,5 +655,14 @@ AppBridge.registrarAtras(() => {
   atrasEncuesta();
   return true;
 });
+/* Minimizar deja ver el mapa sin cerrar el formulario ni perder lo escrito: el
+   overlay deja de tapar el mapa y la hoja se queda con la cabecera y el pie. */
+document.querySelector('#encuesta-agarre').addEventListener('click', () => {
+  const overlay = document.querySelector('#overlay-encuesta');
+  const hoja = overlay.querySelector('.sheet');
+  const min = hoja.classList.toggle('minimizada');
+  overlay.classList.toggle('minimizado', min);
+});
+
 document.querySelector('#bloque-actual').addEventListener('click', () => Encuesta.alternarSelector());
 document.querySelector('#encuesta-cerrar').addEventListener('click', () => Encuesta.cerrar());

@@ -183,13 +183,12 @@ const Ruta = (() => {
     });
   }
 
-  /* Abre el mapa para que el técnico toque. Devuelve el punto, o null si
-     canceló. Lo llama encuesta.js desde el bloque correspondiente. */
-  function marcar(ctx) {
+  /* Abre el mapa para que el técnico toque un lugar. Devuelve el latlng, o null
+     si canceló. Lo usan el marcado de puntos y el alta de equipos nuevos. */
+  function pedirUbicacion(texto) {
     return new Promise((resolve) => {
-      esperando = { ctx, resolve };
-      document.querySelector('#ruta-estado').textContent =
-        `Tocá en el mapa dónde está ${ctx.que} — punto ${ctx.orden}`;
+      esperando = { resolve, crudo: true };
+      document.querySelector('#ruta-estado').textContent = texto;
       document.querySelector('#ruta-toolbar').classList.add('visible');
       map().getContainer().classList.add('marcando-ruta');
       // Centra en la posición del técnico para que toque ahí nomás.
@@ -197,6 +196,14 @@ const Ruta = (() => {
         if (esperando && g) map().setView([g.lat, g.lon], Math.max(map().getZoom(), 18));
       });
     });
+  }
+
+  /* Marca el punto de un equipo de una toma de datos. Lo llama encuesta.js. */
+  async function marcar(ctx) {
+    const latlng = await pedirUbicacion(
+      `Tocá en el mapa dónde está ${ctx.que} — punto ${ctx.orden}`);
+    if (!latlng) return null;
+    return guardarPunto(ctx, latlng);
   }
 
   function cancelarMarcado() {
@@ -214,9 +221,14 @@ const Ruta = (() => {
 
   function marcando() { return Boolean(esperando); }
 
-  async function tocoElMapa(latlng) {
+  function tocoElMapa(latlng) {
     if (!esperando) return;
-    const { ctx, resolve } = esperando;
+    const { resolve } = esperando;
+    cerrarMarcado();
+    resolve(latlng);
+  }
+
+  async function guardarPunto(ctx, latlng) {
     const gps = await posicionGps();
     const punto = {
       id: `${zona}/${ctx.sed}/${ctx.bloque}`,
@@ -233,7 +245,6 @@ const Ruta = (() => {
     };
     await MapDB.putPuntoRuta(punto);
     puntos = puntos.filter((p) => p.id !== punto.id).concat(punto);
-    cerrarMarcado();
     redibujar();
 
     if (gps) {
@@ -242,7 +253,7 @@ const Ruta = (() => {
         AppBridge.showToast(`Marcaste a ${lejos} m de donde estás parado. Si te equivocaste, rehacelo.`, 6000);
       }
     }
-    resolve(punto);
+    return punto;
   }
 
   /* --------------------------------------------------------------- estado */
@@ -308,8 +319,8 @@ const Ruta = (() => {
   function cuantos() { return puntos.length; }
   function alCambiarPuntos(fn) { alCambiar = fn; }
 
-  return { cargarZona, marcar, borrar, cancelarMarcado, marcando, tocoElMapa,
-           alternarVisible, geojson, cuantos, alCambiarPuntos, redibujar };
+  return { cargarZona, marcar, borrar, pedirUbicacion, cancelarMarcado, marcando,
+           tocoElMapa, alternarVisible, geojson, cuantos, alCambiarPuntos, redibujar };
 })();
 
 window.Ruta = Ruta;

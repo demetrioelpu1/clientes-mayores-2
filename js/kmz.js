@@ -46,7 +46,7 @@ const KmzParser = (() => {
   async function cargarAlias() {
     if (alias) return alias;
     try {
-      const json = await (await fetch('data/alias.json')).json();
+      const json = await (await fetch(rutaData('alias.json'))).json();
       // { global, porCapa }: hay rótulos que significan cosas distintas según
       // la capa (ver ALIAS_POR_CAPA en tools/kmz_to_geojson.py).
       alias = { global: json.global || {}, porCapa: json.porCapa || {} };

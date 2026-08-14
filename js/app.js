@@ -846,8 +846,26 @@
     await cargar();
   }
 
+  /* El GPS arranca solo. La barra de abajo existe para mostrar dónde está
+     parado el técnico, y antes quedaba vacía hasta que alguien se acordaba de
+     tocar el botón — que además está pensado para "seguir mi ubicación", no
+     para encender el aparato.
+
+     Arranca SIN seguir: llena las coordenadas y dibuja la posición, pero no
+     mueve el mapa solo. Seguir sigue siendo cosa del botón. */
+  function encenderGpsAlArrancar() {
+    if (!navigator.geolocation) return;
+    const ok = startWatch();
+    if (ok) {
+      following = false;
+      updateLocateButtonVisual();
+      setGpsStatus('buscando', 'Buscando GPS…');
+    }
+  }
+
   /* ============ Inicialización ============ */
   updateConnectionStatus();
+  encenderGpsAlArrancar();
   // La zona de trabajo la abre campana.js al iniciar (ver index.html).
   checkPendingSharedFile();
 

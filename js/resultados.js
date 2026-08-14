@@ -17,7 +17,7 @@ const Resultados = (() => {
 
   async function cargarEsquema() {
     if (esquema) return esquema;
-    esquema = await (await fetch('data/encuesta.json')).json();
+    esquema = await (await fetch(rutaData('encuesta.json'))).json();
     tipos = {};
     esquema.bloques.forEach((b) =>
       b.pasos.forEach((p) =>

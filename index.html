@@ -8,8 +8,8 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="stylesheet" href="css/leaflet.css?v=25" />
-<link rel="stylesheet" href="css/app.css?v=25" />
+<link rel="stylesheet" href="css/leaflet.css?v=29" />
+<link rel="stylesheet" href="css/app.css?v=29" />
 </head>
 <body>
 <div id="app">
@@ -225,6 +225,8 @@
   <!-- ===== Panel: toma de datos (Fase 3) ===== -->
   <div class="sheet-overlay" id="overlay-encuesta">
     <div class="sheet sheet-alta">
+      <!-- Barra para bajar el formulario y ver el mapa sin cerrar nada. -->
+      <button class="sheet-agarre" id="encuesta-agarre" aria-label="Minimizar o maximizar"></button>
       <h2>
         <span class="h2-izq">
           <button class="sheet-atras" id="encuesta-atras-cab" aria-label="Atrás">&#8592;</button>
@@ -279,17 +281,33 @@
   <div class="toast" id="toast"></div>
 </div>
 
+<script>
+  /* Los .json de data/ (catálogo, esquema del formulario, alias) cambian junto
+     con el código, pero se pedían SIN versión: el navegador servía el archivo
+     viejo de su caché HTTP y la app corría con un esquema desactualizado aunque
+     se hubiera publicado uno nuevo. Pasó con la foto 7 del medidor.
+
+     La versión se lee de los propios assets, así no hay un tercer número que
+     mantener a mano. Los set-*.json quedan afuera a propósito: pesan cientos de
+     KB, no cambian entre versiones y el service worker los sirve de caché. */
+  window.APP_V = (function () {
+    const link = document.querySelector('link[href*="?v="]');
+    const m = link && /\?v=(\d+)/.exec(link.getAttribute('href'));
+    return m ? m[1] : '';
+  })();
+  window.rutaData = (archivo) => `data/${archivo}` + (window.APP_V ? `?v=${window.APP_V}` : '');
+</script>
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/fflate.js"></script>
-<script src="js/db.js?v=25"></script>
-<script src="js/offline-tilelayer.js?v=25"></script>
-<script src="js/kmz.js?v=25"></script>
-<script src="js/ruta.js?v=25"></script>
-<script src="js/app.js?v=25"></script>
-<script src="js/campana.js?v=25"></script>
-<script src="js/encuesta.js?v=25"></script>
-<script src="js/xlsx.js?v=25"></script>
-<script src="js/resultados.js?v=25"></script>
+<script src="js/db.js?v=29"></script>
+<script src="js/offline-tilelayer.js?v=29"></script>
+<script src="js/kmz.js?v=29"></script>
+<script src="js/ruta.js?v=29"></script>
+<script src="js/app.js?v=29"></script>
+<script src="js/campana.js?v=29"></script>
+<script src="js/encuesta.js?v=29"></script>
+<script src="js/xlsx.js?v=29"></script>
+<script src="js/resultados.js?v=29"></script>
 <script>Campana.iniciar();</script>
 </body>
 </html>

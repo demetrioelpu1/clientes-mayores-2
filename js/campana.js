@@ -82,7 +82,7 @@ const Campana = (() => {
 
   async function cargarCatalogo() {
     if (catalogo) return catalogo;
-    const res = await fetch('data/catalogo.json');
+    const res = await fetch(rutaData('catalogo.json'));
     if (!res.ok) throw new Error('No se encontró data/catalogo.json');
     catalogo = await res.json();
     return catalogo;
@@ -109,9 +109,58 @@ const Campana = (() => {
       const activa = paquetes.find((p) => p.capa === c && p.activa);
       capas[c] = activa ? activa.elementos : desdePrecompilado(c);
     });
-    clientes = construirClientes();
+    clientes = construirClientes().concat(await equiposNuevos());
     // El recorrido es de esta zona: al cambiar de alimentador se trae el suyo.
     if (window.Ruta) await Ruta.cargarZona(zonaActual());
+  }
+
+  /* Equipos que el técnico encontró en campo y NO están en el GIS. Es el
+     hallazgo más valioso de la campaña, así que no viven en un almacén aparte:
+     existen porque hay una toma de datos que los registra, y esa toma es la que
+     después sale en el Excel como una fila más. */
+  async function equiposNuevos() {
+    const todas = await MapDB.getAllEncuestas();
+    return todas
+      .filter((e) => e.nuevo && e.setSlug === setActual.slug && e.alimentador === alimentador)
+      .map((e) => ({
+        sed: e.sed,
+        tipo: e.tipo || 'trafomix',
+        nuevo: true,
+        etiqueta: e.etiqueta || e.sed,
+        nombre: e.nombre || '',
+        alimentador: e.alimentador,
+        sistema: e.sistema || '',
+        potencia_kva: '',
+        lat: e.lat,
+        lon: e.lon,
+        gis: null,                 // no hay dato del GIS: de eso se trata
+      }))
+      .filter((c) => c.lat !== undefined && c.lat !== null);
+  }
+
+  /* Da de alta un equipo que está en el terreno pero no en el mapa. */
+  async function agregarEquipoNuevo(tipo) {
+    const que = tipo === 'sed' ? 'la SED' : 'el trafomix';
+    const latlng = await Ruta.pedirUbicacion(`Tocá en el mapa dónde está ${que} que falta`);
+    if (!latlng) return;
+
+    const yaHay = (await MapDB.getAllEncuestas())
+      .filter((e) => e.nuevo && e.alimentador === alimentador).length;
+    const sed = `NUEVO-${alimentador}-${String(yaHay + 1).padStart(2, '0')}`;
+
+    const cliente = {
+      sed, tipo, nuevo: true, setSlug: setActual.slug,
+      etiqueta: sed, nombre: `${tipo === 'sed' ? 'SED' : 'Trafomix'} sin registrar`,
+      alimentador, sistema: '', potencia_kva: '',
+      lat: latlng.lat, lon: latlng.lng, gis: null,
+    };
+
+    clientes = clientes.concat(cliente);
+    redibujar();
+    AppBridge.closeSheet('#overlay-campana');
+    // El código que lleva pegado el equipo lo escribe el técnico en "código de
+    // ruta", dentro del formulario: es lo único que lo identifica de verdad.
+    Encuesta.abrir(cliente);
   }
 
   function desdePrecompilado(capa) {
@@ -256,7 +305,10 @@ const Campana = (() => {
       const m = L.circleMarker([c.lat, c.lon], {
         radius: hecho ? 7 : 9,
         weight: hecho ? 2 : 3,
-        color: '#ffffff',
+        // Borde punteado para lo que no está en el GIS: se distingue de un
+        // vistazo sin gastar otro color, que ya no quedan libres.
+        color: c.nuevo ? '#17d1c8' : '#ffffff',
+        dashArray: c.nuevo ? '3 3' : null,
         opacity: hecho ? 0.45 : 1,
         fillColor: COLOR[estadoDe(c)],
         fillOpacity: hecho ? 0.35 : 1,
@@ -538,7 +590,8 @@ const Campana = (() => {
         <div class="campana-fila cliente" data-cliente="${c.sed}">
           <div class="estado-punto ${estado}"></div>
           <div class="campana-info">
-            <div class="campana-nombre">${c.nombre || c.etiqueta || '(sin nombre)'}</div>
+            <div class="campana-nombre">${c.nombre || c.etiqueta || '(sin nombre)'}${
+              c.nuevo ? ' <span class="chip-nuevo">no está en el GIS</span>' : ''}</div>
             <div class="campana-detalle">${c.etiqueta || c.sed}${c.potencia_kva ? ' · ' + c.potencia_kva : ''}</div>
           </div>
           <div class="campana-flecha">›</div>
@@ -576,8 +629,19 @@ const Campana = (() => {
       <div class="capa-tira">${tira}</div>
       ${botonCarga}
       ${botonInicio}
+      <div class="nuevo-equipo">
+        <div class="nuevo-texto">¿Encontraste un equipo que no está en el mapa?</div>
+        <div class="nuevo-botones">
+          <button class="mini" data-nuevo="trafomix">＋ Trafomix</button>
+          <button class="mini" data-nuevo="sed">＋ SED</button>
+        </div>
+      </div>
       ${filas || '<div class="campana-vacio">No hay clientes mayores cargados en este alimentador.</div>'}`);
     conectarMigas();
+
+    $('#campana-cuerpo').querySelectorAll('[data-nuevo]').forEach((el) => {
+      el.addEventListener('click', () => agregarEquipoNuevo(el.dataset.nuevo));
+    });
 
     $('#btn-cargar-kmz').addEventListener('click', () => pedirArchivos(null));
     if (cabecera) $('#btn-ir-inicio').addEventListener('click', irAlInicio);
