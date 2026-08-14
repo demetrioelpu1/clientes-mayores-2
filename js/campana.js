@@ -141,8 +141,11 @@ const Campana = (() => {
   /* Da de alta un equipo que está en el terreno pero no en el mapa. */
   async function agregarEquipoNuevo(tipo) {
     const que = tipo === 'sed' ? 'la SED' : 'el trafomix';
+    // El panel se cierra ANTES de pedir el toque: si no, tapa el mapa entero y
+    // el técnico ve el aviso "tocá en el mapa" sin poder tocar nada.
+    AppBridge.closeSheet('#overlay-campana');
     const latlng = await Ruta.pedirUbicacion(`Tocá en el mapa dónde está ${que} que falta`);
-    if (!latlng) return;
+    if (!latlng) { abrirSelector(); return; }   // si cancela, vuelve donde estaba
 
     const yaHay = (await MapDB.getAllEncuestas())
       .filter((e) => e.nuevo && e.alimentador === alimentador).length;
@@ -157,7 +160,6 @@ const Campana = (() => {
 
     clientes = clientes.concat(cliente);
     redibujar();
-    AppBridge.closeSheet('#overlay-campana');
     // El código que lleva pegado el equipo lo escribe el técnico en "código de
     // ruta", dentro del formulario: es lo único que lo identifica de verdad.
     Encuesta.abrir(cliente);

@@ -102,7 +102,75 @@
   function closeSheet(id) {
     $(id).classList.remove('visible');
   }
+  /* Cualquier panel con un .sheet-agarre se puede arrastrar: la hoja sigue al
+     dedo y al soltar cae al estado más cercano —abierta, minimizada, cerrada—
+     bajando. Un toque sin arrastrar alterna abierta/minimizada, que es lo más
+     rápido para espiar el mapa sin cerrar nada.
+
+     `alCerrar` deja que un panel haga lo suyo al cerrarse: la toma de datos,
+     por ejemplo, tiene que guardar antes. */
+  const cierresPropios = {};
+  function alCerrarPanel(idOverlay, fn) { cierresPropios[idOverlay] = fn; }
+
+  function hacerDeslizable(overlay) {
+    const hoja = overlay.querySelector('.sheet');
+    const agarre = overlay.querySelector('.sheet-agarre');
+    if (!hoja || !agarre) return;
+
+    const UMBRAL = 60;
+    let y0 = null;
+    let arrastrando = false;
+
+    const estado = () => (hoja.classList.contains('minimizada') ? 'minimizada' : 'abierta');
+
+    function aplicar(nuevo) {
+      hoja.style.transition = '';
+      hoja.style.transform = '';
+      if (nuevo === 'cerrada') {
+        hoja.classList.remove('minimizada');
+        overlay.classList.remove('minimizado');
+        const propio = cierresPropios['#' + overlay.id];
+        if (propio) propio(); else overlay.classList.remove('visible');
+        return;
+      }
+      const min = nuevo === 'minimizada';
+      hoja.classList.toggle('minimizada', min);
+      overlay.classList.toggle('minimizado', min);
+    }
+
+    agarre.addEventListener('pointerdown', (e) => {
+      y0 = e.clientY;
+      arrastrando = false;
+      hoja.style.transition = 'none';
+      agarre.setPointerCapture(e.pointerId);
+    });
+    agarre.addEventListener('pointermove', (e) => {
+      if (y0 === null) return;
+      const dy = e.clientY - y0;
+      if (Math.abs(dy) > 6) arrastrando = true;
+      hoja.style.transform = `translateY(${Math.max(0, dy)}px)`;   // solo hacia abajo
+    });
+    agarre.addEventListener('pointerup', (e) => {
+      if (y0 === null) return;
+      const dy = e.clientY - y0;
+      const desde = estado();
+      y0 = null;
+      hoja.style.transition = 'transform .18s ease';
+      if (!arrastrando) aplicar(desde === 'abierta' ? 'minimizada' : 'abierta');
+      else if (dy > UMBRAL) aplicar(desde === 'abierta' ? 'minimizada' : 'cerrada');
+      else if (dy < -UMBRAL) aplicar('abierta');
+      else aplicar(desde);
+    });
+    agarre.addEventListener('pointercancel', () => {
+      if (y0 === null) return;
+      y0 = null;
+      hoja.style.transition = 'transform .18s ease';
+      aplicar(estado());
+    });
+  }
+
   $$('.sheet-overlay').forEach((ov) => {
+    hacerDeslizable(ov);
     ov.addEventListener('click', (e) => {
       if (e.target === ov) ov.classList.remove('visible');
     });
@@ -114,7 +182,7 @@
   /* ============ Puente para los módulos externos (campana.js) ============
      app.js vive dentro de una IIFE: esto es lo único que se comparte afuera. */
   window.AppBridge = {
-    map, showToast, openSheet, closeSheet,
+    map, showToast, openSheet, closeSheet, alCerrarPanel,
     // fn() debe devolver true si consumió el "atrás"
     registrarAtras: (fn) => manejadoresAtras.push(fn),
   };

@@ -8,8 +8,8 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="stylesheet" href="css/leaflet.css?v=31" />
-<link rel="stylesheet" href="css/app.css?v=31" />
+<link rel="stylesheet" href="css/leaflet.css?v=32" />
+<link rel="stylesheet" href="css/app.css?v=32" />
 </head>
 <body>
 <div id="app">
@@ -191,6 +191,7 @@
   <!-- ===== Panel: zona de trabajo (Fase 2) — sistema › SET › alimentador › clientes ===== -->
   <div class="sheet-overlay" id="overlay-campana">
     <div class="sheet">
+      <button class="sheet-agarre" aria-label="Minimizar o cerrar"></button>
       <h2>
         <span class="h2-izq">
           <button class="sheet-atras" id="campana-atras" aria-label="Atrás">&#8592;</button>
@@ -206,6 +207,7 @@
   <!-- ===== Panel: ficha de un cliente mayor ===== -->
   <div class="sheet-overlay" id="overlay-cliente">
     <div class="sheet">
+      <button class="sheet-agarre" aria-label="Minimizar o cerrar"></button>
       <h2>
         <span class="h2-izq">
           <button class="sheet-atras" id="cliente-atras" aria-label="Atrás">&#8592;</button>
@@ -255,6 +257,7 @@
   <!-- ===== Panel: resultados y descarga (Fase 4) ===== -->
   <div class="sheet-overlay" id="overlay-resultados">
     <div class="sheet sheet-alta">
+      <button class="sheet-agarre" aria-label="Minimizar o cerrar"></button>
       <h2>
         <span class="h2-izq"><span>Resultados</span></span>
         <span class="close" data-close="overlay-resultados">✕</span>
@@ -299,15 +302,15 @@
 </script>
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/fflate.js"></script>
-<script src="js/db.js?v=31"></script>
-<script src="js/offline-tilelayer.js?v=31"></script>
-<script src="js/kmz.js?v=31"></script>
-<script src="js/ruta.js?v=31"></script>
-<script src="js/app.js?v=31"></script>
-<script src="js/campana.js?v=31"></script>
-<script src="js/encuesta.js?v=31"></script>
-<script src="js/xlsx.js?v=31"></script>
-<script src="js/resultados.js?v=31"></script>
+<script src="js/db.js?v=32"></script>
+<script src="js/offline-tilelayer.js?v=32"></script>
+<script src="js/kmz.js?v=32"></script>
+<script src="js/ruta.js?v=32"></script>
+<script src="js/app.js?v=32"></script>
+<script src="js/campana.js?v=32"></script>
+<script src="js/encuesta.js?v=32"></script>
+<script src="js/xlsx.js?v=32"></script>
+<script src="js/resultados.js?v=32"></script>
 <script>Campana.iniciar();</script>
 </body>
 </html>

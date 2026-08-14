@@ -655,81 +655,9 @@ AppBridge.registrarAtras(() => {
   atrasEncuesta();
   return true;
 });
-/* Minimizar deja ver el mapa sin cerrar el formulario ni perder lo escrito.
-   Se arrastra: la hoja sigue el dedo y al soltar cae al estado más cercano
-   —abierta, minimizada o cerrada—, en ese orden hacia abajo. Un toque sin
-   arrastrar sigue alternando entre abierta y minimizada, que es lo más rápido
-   cuando solo querés espiar el mapa. */
-(() => {
-  const overlay = document.querySelector('#overlay-encuesta');
-  const hoja = overlay.querySelector('.sheet');
-  const agarre = document.querySelector('#encuesta-agarre');
-
-  const UMBRAL = 60;          // px para que cuente como arrastre y no como toque
-  let y0 = null;
-  let arrastrando = false;
-
-  function aplicar(estado) {
-    hoja.style.transition = '';
-    hoja.style.transform = '';
-    if (estado === 'cerrada') {
-      overlay.classList.remove('minimizado');
-      hoja.classList.remove('minimizada');
-      Encuesta.cerrar();
-      return;
-    }
-    const min = estado === 'minimizada';
-    hoja.classList.toggle('minimizada', min);
-    overlay.classList.toggle('minimizado', min);
-  }
-
-  function estadoActual() {
-    return hoja.classList.contains('minimizada') ? 'minimizada' : 'abierta';
-  }
-
-  agarre.addEventListener('pointerdown', (e) => {
-    y0 = e.clientY;
-    arrastrando = false;
-    hoja.style.transition = 'none';
-    agarre.setPointerCapture(e.pointerId);
-  });
-
-  agarre.addEventListener('pointermove', (e) => {
-    if (y0 === null) return;
-    const dy = e.clientY - y0;
-    if (Math.abs(dy) > 6) arrastrando = true;
-    // Solo hacia abajo: hacia arriba ya está en su tope.
-    hoja.style.transform = `translateY(${Math.max(0, dy)}px)`;
-  });
-
-  function soltar(e) {
-    if (y0 === null) return;
-    const dy = e.clientY - y0;
-    const desde = estadoActual();
-    y0 = null;
-    hoja.style.transition = 'transform .18s ease';
-
-    if (!arrastrando) {                       // toque simple
-      aplicar(desde === 'abierta' ? 'minimizada' : 'abierta');
-      return;
-    }
-    if (dy > UMBRAL) {
-      aplicar(desde === 'abierta' ? 'minimizada' : 'cerrada');
-    } else if (dy < -UMBRAL) {
-      aplicar('abierta');
-    } else {
-      aplicar(desde);                          // no llegó: vuelve a donde estaba
-    }
-  }
-
-  agarre.addEventListener('pointerup', soltar);
-  agarre.addEventListener('pointercancel', () => {
-    if (y0 === null) return;
-    y0 = null;
-    hoja.style.transition = 'transform .18s ease';
-    aplicar(estadoActual());
-  });
-})();
+/* El arrastre de la hoja lo maneja app.js para todos los paneles por igual.
+   Acá solo se avisa qué hacer al cerrar: la toma de datos tiene que guardar. */
+AppBridge.alCerrarPanel('#overlay-encuesta', () => Encuesta.cerrar());
 
 document.querySelector('#bloque-actual').addEventListener('click', () => Encuesta.alternarSelector());
 document.querySelector('#encuesta-cerrar').addEventListener('click', () => Encuesta.cerrar());

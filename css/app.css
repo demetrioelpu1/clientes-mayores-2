@@ -655,15 +655,16 @@ html, body {
 }
 .sheet-agarre:active::before { background: var(--accent); }
 
-/* Minimizado: se ve la cabecera y el pie, el cuerpo se esconde. Así el técnico
-   mira el mapa y sigue viendo en qué cliente y en qué bloque estaba. */
-.sheet-alta.minimizada { max-height: none; }
-.sheet-alta.minimizada #encuesta-cuerpo,
-.sheet-alta.minimizada .paso-barra,
-.sheet-alta.minimizada .bloque-selector { display: none; }
-.sheet-alta.minimizada .sheet-agarre::before { background: var(--accent); }
-#overlay-encuesta.minimizado { background: none; pointer-events: none; }
-#overlay-encuesta.minimizado .sheet { pointer-events: auto; }
+/* Minimizado: queda la cabecera y nada más, así el técnico mira el mapa y
+   sigue viendo en qué estaba. Vale para cualquier panel: se esconde todo lo
+   que no sea el agarre ni el título. */
+.sheet.minimizada { max-height: none; }
+.sheet.minimizada > *:not(h2):not(.sheet-agarre) { display: none; }
+.sheet.minimizada .sheet-agarre::before { background: var(--accent); }
+
+/* Minimizado el overlay deja de tapar el mapa y los toques llegan hasta él. */
+.sheet-overlay.minimizado { background: none; pointer-events: none; }
+.sheet-overlay.minimizado .sheet { pointer-events: auto; }
 
 /* Desplegable de bloques. El <select> nativo de Android se abre como una
    lista a pantalla completa que no se puede estilar, por eso va uno propio. */
