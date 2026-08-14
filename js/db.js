@@ -1,13 +1,14 @@
 /* db.js — capa de acceso a IndexedDB para tiles de mapa y recortes (packs) offline */
 
 const DB_NAME = 'catastro-map-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_TILES = 'tiles';
 const STORE_PACKS = 'packs';
 const STORE_NETWORK = 'network_features'; // postes, tramos, subestaciones cargados desde KMZ/KML
 const STORE_ENCUESTAS = 'encuestas';      // una por cliente mayor (Fase 3)
 const STORE_FOTOS = 'fotos';              // Blobs aparte: listar encuestas no debe arrastrar MB
 const STORE_PAQUETES = 'paquetes';        // KMZ cargados por alimentador, versionados (Fase 2)
+const STORE_RUTA = 'ruta';                // migas numeradas que el técnico deja al recorrer
 
 let _dbPromise = null;
 
@@ -45,6 +46,13 @@ function openDB() {
         // sobrescribe: la anterior queda archivada hasta que alguien la borre,
         // así se puede saber contra qué versión del GIS se comparó en campo.
         const store = db.createObjectStore(STORE_PAQUETES, { keyPath: 'id' });
+        store.createIndex('zona', 'zona');
+      }
+      if (!db.objectStoreNames.contains(STORE_RUTA)) {
+        // Un punto por cada vez que el técnico toca la pantalla mientras
+        // recorre. El número solo avanza: si vuelve sobre sus pasos, el punto
+        // nuevo lleva el número siguiente, no repite el viejo.
+        const store = db.createObjectStore(STORE_RUTA, { keyPath: 'id' });
         store.createIndex('zona', 'zona');
       }
     };
@@ -385,6 +393,48 @@ async function getPaquetesDeZona(zona) {
   });
 }
 
+/* ---- ruta: migas numeradas del recorrido del técnico ---- */
+
+async function getRutaDeZona(zona) {
+  const store = await tx(STORE_RUTA, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.index('zona').getAll(zona);
+    req.onsuccess = () => resolve((req.result || []).sort((a, b) => a.n - b.n));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* Los puntos de una toma de datos, indexados por bloque: { trafomix: {...} } */
+async function getPuntosDeToma(sed) {
+  const store = await tx(STORE_RUTA, 'readonly');
+  const todos = await new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+  const mapa = {};
+  todos.filter((p) => p.sed === sed).forEach((p) => { mapa[p.bloque] = p; });
+  return mapa;
+}
+
+async function putPuntoRuta(punto) {
+  const store = await tx(STORE_RUTA, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(punto);
+    req.onsuccess = () => resolve(punto.id);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deletePuntoRuta(id) {
+  const store = await tx(STORE_RUTA, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function getTodosLosPaquetes() {
   const store = await tx(STORE_PAQUETES, 'readonly');
   return new Promise((resolve, reject) => {
@@ -454,6 +504,10 @@ window.MapDB = {
   zonaKey,
   putPaquete,
   getPaquetesDeZona,
+  getRutaDeZona,
+  getPuntosDeToma,
+  putPuntoRuta,
+  deletePuntoRuta,
   getTodosLosPaquetes,
   activarPaquete,
   deletePaquete,

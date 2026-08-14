@@ -27,7 +27,7 @@ const Campana = (() => {
 
   const COLOR = {
     tramos_mt: '#e0553b',
-    sed: '#7a8290',
+    sed: '#ff33cc',        // magenta: pedido del ingeniero, se ubica más rápido
     pendiente: '#d4af1f',
     borrador: '#f5822a',
     completa: '#3fa85f',
@@ -110,6 +110,8 @@ const Campana = (() => {
       capas[c] = activa ? activa.elementos : desdePrecompilado(c);
     });
     clientes = construirClientes();
+    // El recorrido es de esta zona: al cambiar de alimentador se trae el suyo.
+    if (window.Ruta) await Ruta.cargarZona(zonaActual());
   }
 
   function desdePrecompilado(capa) {
@@ -297,11 +299,20 @@ const Campana = (() => {
   }
   function refrescarVista() { if (vistaActual) vistaActual(); }
 
-  function abrirSelector() {
+  /* Se ejecuta una sola vez, apenas el técnico termine de elegir el alimentador.
+     Lo usa el share de WhatsApp: los archivos llegan antes de saber dónde van. */
+  let alElegirZona = null;
+
+  function abrirSelector(opciones) {
+    alElegirZona = (opciones && opciones.alElegirZona) || null;
     pila = [];
     vistaActual = null;
     ir(getTecnico() ? renderSistemas : renderTecnico);
     AppBridge.openSheet('#overlay-campana');
+  }
+
+  function hayZonaElegida() {
+    return Boolean(setActual && alimentador);
   }
 
   function pintar(titulo, migas, cuerpo) {
@@ -496,6 +507,12 @@ const Campana = (() => {
     actualizarSubtitulo();
     redibujar();
     ir(renderClientes);
+
+    if (alElegirZona) {
+      const pendiente = alElegirZona;
+      alElegirZona = null;      // se limpia antes de correr, para que no se repita
+      await pendiente();
+    }
   }
 
   /* --------------------------------------------------------------- clientes */
@@ -854,11 +871,18 @@ const Campana = (() => {
     el.textContent = `Alim. ${alimentador} · ${hechos}/${total}`;
   }
 
+  /* iniciar() es asíncrono y restaura la zona guardada recién sobre el final.
+     Quien necesite saber en qué alimentador estamos tiene que esperar esto, o
+     va a leer que no hay ninguno. Le pasó al import de archivos compartidos. */
+  let marcarListo;
+  const listo = new Promise((r) => { marcarListo = r; });
+
   async function iniciar() {
     try {
       await cargarCatalogo();
     } catch (e) {
       AppBridge.showToast(e.message, 4000);
+      marcarListo();
       return;
     }
     try { estados = await MapDB.getEstadosEncuestas(); }
@@ -882,9 +906,11 @@ const Campana = (() => {
         redibujar();
       }
       actualizarSubtitulo();
+      marcarListo();
       return;
     }
     actualizarSubtitulo();
+    marcarListo();
     abrirSelector();
   }
 
@@ -894,9 +920,46 @@ const Campana = (() => {
     return alimentador ? `SET ${setActual.nombre} · Alim. ${alimentador}` : `SET ${setActual.nombre}`;
   }
 
+  // Los tramos MT de la zona activa: ruta.js los usa para que el recorrido siga
+  // la red en vez de unir los puntos en línea recta.
+  function getTramos() { return capas.tramos_mt || []; }
+
+  /* Salta directo a un cliente desde otra pantalla (hoy: la lista de
+     Resultados). Si está en otro SET o alimentador, cambia de zona primero.
+     Devuelve false si no lo encuentra — puede pasar si esa toma de datos se
+     hizo con un paquete de KMZ que después se borró. */
+  async function irACliente(slug, alim, sed) {
+    if (!setActual || setActual.slug !== slug) {
+      const encontrado = buscarSet(slug);
+      if (!encontrado) return false;
+      setActual = { slug, nombre: encontrado.set.nombre, sistema: encontrado.sistema };
+      precompilado = null;
+      if (encontrado.set.disponible) {
+        try { precompilado = await (await fetch(`data/set-${slug}.json`)).json(); }
+        catch (e) { precompilado = null; }
+      }
+      localStorage.setItem(CLAVE_SET, slug);
+    }
+    if (alimentador !== alim) {
+      alimentador = alim;
+      localStorage.setItem(CLAVE_ALIM, alim);
+      await cargarCapasDeZona();
+      actualizarSubtitulo();
+      redibujar();
+    }
+
+    const c = clientes.find((x) => x.sed === sed);
+    if (!c) return false;
+
+    map().setView([c.lat, c.lon], 18);
+    if (marcadores[sed]) marcadores[sed].openTooltip();
+    return Object.assign({ setSlug: setActual.slug }, c);
+  }
+
   return {
-    iniciar, abrirSelector, hayZonaActiva, etiquetaActual,
-    redibujar, getTecnico, refrescarEstados, atras, importarArchivos,
+    iniciar, listo, abrirSelector, hayZonaActiva, hayZonaElegida, etiquetaActual,
+    redibujar, getTecnico, refrescarEstados, atras, importarArchivos, getTramos,
+    irACliente,
   };
 })();
 

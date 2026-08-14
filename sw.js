@@ -2,7 +2,7 @@
    Los tiles del mapa NO se cachean aquí: eso lo maneja IndexedDB desde app.js/db.js,
    para poder gestionarlos como "recortes" independientes con nombre, borrado, etc. */
 
-const CACHE_NAME = 'catastro-app-shell-v19';
+const CACHE_NAME = 'catastro-app-shell-v23';
 const APP_SHELL = [
   './',
   './index.html',
@@ -19,8 +19,8 @@ const APP_SHELL = [
   './js/db.js',
   './js/offline-tilelayer.js',
   './js/kmz.js',
-  './js/network.js',
   './js/campana.js',
+  './js/ruta.js',
   './js/encuesta.js',
   './js/xlsx.js',
   './js/resultados.js',
@@ -55,11 +55,14 @@ function openShareDB() {
   });
 }
 
-async function savePendingShare(name, type, buffer) {
+/* Guarda TODOS los archivos compartidos, no uno. El ingeniero manda 4 por
+   alimentador (Tramos MT, Trafomix, SED, Cabecera) y compartirlos de a uno es
+   repetir el trámite cuatro veces por zona. */
+async function savePendingShare(archivos) {
   const db = await openShareDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(SHARE_STORE, 'readwrite');
-    tx.objectStore(SHARE_STORE).put({ name, type, buffer }, 'latest');
+    tx.objectStore(SHARE_STORE).put(archivos, 'latest');
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -83,10 +86,14 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-/* Cuando el usuario comparte un KMZ/KML desde WhatsApp ("Compartir" → esta
-   app), el navegador hace un POST a share_target.action (share-kmz.html).
-   Lo interceptamos, guardamos el archivo, y redirigimos a la app normal con
-   una señal para que abra el flujo de "Confirmar capas" automáticamente. */
+/* Cuando el técnico comparte KMZ/KML desde WhatsApp ("Compartir" → esta app),
+   el navegador hace un POST a share_target.action (share-kmz.html). Lo
+   interceptamos, guardamos los archivos y redirigimos a la app con una señal
+   para que los cargue en el alimentador activo.
+
+   Esta vía es más confiable que el selector de archivos: acá los bytes vienen
+   dentro del POST, mientras que el selector devuelve un puntero a un proveedor
+   de documentos que puede no tener el archivo en el teléfono. */
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -99,10 +106,15 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const formData = await event.request.formData();
-          const file = formData.get('kmzfile');
-          if (file && typeof file.arrayBuffer === 'function') {
-            const buffer = await file.arrayBuffer();
-            await savePendingShare(file.name || 'compartido.kmz', file.type || '', buffer);
+          const recibidos = formData.getAll('kmzfile')
+            .filter((f) => f && typeof f.arrayBuffer === 'function');
+          if (recibidos.length) {
+            const archivos = await Promise.all(recibidos.map(async (f) => ({
+              name: f.name || 'compartido.kmz',
+              type: f.type || '',
+              buffer: await f.arrayBuffer(),
+            })));
+            await savePendingShare(archivos);
             return Response.redirect('./index.html?sharedImport=1', 303);
           }
           return Response.redirect('./index.html', 303);

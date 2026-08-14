@@ -8,8 +8,8 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="stylesheet" href="css/leaflet.css?v=19" />
-<link rel="stylesheet" href="css/app.css?v=19" />
+<link rel="stylesheet" href="css/leaflet.css?v=23" />
+<link rel="stylesheet" href="css/app.css?v=23" />
 </head>
 <body>
 <div id="app">
@@ -51,6 +51,13 @@
     <!-- Mira central para ubicar la esquina 2 arrastrando el mapa -->
     <div class="select-crosshair" id="select-crosshair">+</div>
 
+    <!-- Aviso mientras el técnico marca un punto en el mapa. Deja libre la
+         columna derecha: si no, tapa los botones flotantes. -->
+    <div id="ruta-toolbar">
+      <div class="hint" id="ruta-estado"></div>
+      <button class="btn-secondary" id="ruta-cancelar">Cancelar</button>
+    </div>
+
     <div class="info-pill" id="packs-count-pill">0 recortes descargados</div>
 
     <!-- Controles flotantes -->
@@ -72,12 +79,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="14" y2="18"></line></svg>
         <div class="badge" id="packs-badge" style="display:none;">0</div>
       </div>
-      <!-- Panel de importación manual de KMZ: reemplazado por la carga dentro de
-           cada alimentador. Se deja el código en su lugar por si hace falta
-           volver a habilitarlo; alcanza con quitar el hidden. -->
-      <div class="fab" id="btn-network" title="Red eléctrica base" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="12" cy="18" r="2"></circle><line x1="6.7" y1="7" x2="11.3" y2="16.3"></line><line x1="17.3" y1="7" x2="12.7" y2="16.3"></line><line x1="7" y1="6" x2="17" y2="6"></line></svg>
-        <div class="badge" id="network-badge" style="display:none;">0</div>
+      
+      <div class="fab" id="btn-ruta" title="Marcar el recorrido: toca el mapa y deja un punto numerado">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.5"></circle><circle cx="18" cy="5" r="2.5"></circle><path d="M8.5 18C13 17 11 9 15.5 6.5"></path></svg>
+        <div class="badge" id="ruta-badge" style="display:none;">0</div>
       </div>
       <div class="fab" id="btn-locate" title="Toca: activar/seguir GPS. Mantén presionado: apagar GPS.">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path></svg>
@@ -178,40 +183,10 @@
   </div>
 
   <!-- ===== Panel: Red eléctrica base ===== -->
-  <div class="sheet-overlay" id="overlay-network">
-    <div class="sheet">
-      <h2>Red eléctrica base <span class="close" data-close="overlay-network">✕</span></h2>
-
-      <button class="btn-outline-danger" id="network-clear-btn" style="width:100%;">🗑 Limpiar red cargada</button>
-
-      <div class="network-load-row">
-        <button class="btn-primary" id="network-load-btn">⬆ Cargar archivo KMZ / KML</button>
-        <button class="btn-secondary" id="network-export-btn">⬇ Descargar datos</button>
-      </div>
-      <input type="file" id="network-file-input" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml" style="display:none" />
-
-      <div class="section-label">CAPAS VISIBLES</div>
-      <div id="network-layers-list"></div>
-
-      <div class="hint-box">
-        Comparte cada KMZ desde WhatsApp hacia esta app (botón Compartir), o
-        guárdalo en el celular y usa "Cargar archivo KMZ / KML" aquí arriba.
-        Cada archivo se SUMA a lo que ya tienes y queda guardado en este
-        celular. Usa "Limpiar red cargada" solo cuando quieras empezar de
-        cero.
-      </div>
-    </div>
-  </div>
+  
 
   <!-- ===== Panel: confirmar capas al importar un KMZ/KML ===== -->
-  <div class="sheet-overlay" id="overlay-kmz-map">
-    <div class="sheet">
-      <h2>Confirmar capas <span class="close" data-close="overlay-kmz-map">✕</span></h2>
-      <div class="progress-text" id="kmz-summary" style="text-align:left; margin-bottom:10px;"></div>
-      <div id="kmz-folder-list"></div>
-      <button class="btn-primary" id="kmz-import-confirm-btn" style="width:100%; padding:11px; margin-top:6px;">Importar</button>
-    </div>
-  </div>
+  
 
   <!-- ===== Panel: zona de trabajo (Fase 2) — sistema › SET › alimentador › clientes ===== -->
   <div class="sheet-overlay" id="overlay-campana">
@@ -287,6 +262,9 @@
         <button class="btn-secondary" id="resultados-excel">⬇ Solo Excel</button>
         <button class="btn-primary" id="resultados-zip">⬇ Excel + fotos</button>
       </div>
+      <div class="res-acciones">
+        <button class="btn-secondary" id="resultados-geojson" style="flex:1;">⬇ Recorrido (GeoJSON)</button>
+      </div>
     </div>
   </div>
 
@@ -303,15 +281,15 @@
 
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/fflate.js"></script>
-<script src="js/db.js?v=19"></script>
-<script src="js/offline-tilelayer.js?v=19"></script>
-<script src="js/kmz.js?v=19"></script>
-<script src="js/network.js?v=19"></script>
-<script src="js/app.js?v=19"></script>
-<script src="js/campana.js?v=19"></script>
-<script src="js/encuesta.js?v=19"></script>
-<script src="js/xlsx.js?v=19"></script>
-<script src="js/resultados.js?v=19"></script>
+<script src="js/db.js?v=23"></script>
+<script src="js/offline-tilelayer.js?v=23"></script>
+<script src="js/kmz.js?v=23"></script>
+<script src="js/ruta.js?v=23"></script>
+<script src="js/app.js?v=23"></script>
+<script src="js/campana.js?v=23"></script>
+<script src="js/encuesta.js?v=23"></script>
+<script src="js/xlsx.js?v=23"></script>
+<script src="js/resultados.js?v=23"></script>
 <script>Campana.iniciar();</script>
 </body>
 </html>

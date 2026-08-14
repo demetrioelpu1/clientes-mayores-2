@@ -69,12 +69,14 @@ const Resultados = (() => {
           .slice()
           .sort((a, b) => (b.actualizado || '').localeCompare(a.actualizado || ''))
           .map((e) => `
-            <div class="campana-fila" data-ver="${e.sed}">
+            <div class="campana-fila" data-ver="${e.sed}"
+                 data-set="${e.setSlug || ''}" data-alim="${e.alimentador || ''}">
               <div class="estado-punto ${e.estado === 'completa' ? 'completa' : 'borrador'}"></div>
               <div class="campana-info">
                 <div class="campana-nombre">${e.nombre || e.etiqueta || e.sed}</div>
                 <div class="campana-detalle">Alim. ${e.alimentador} · ${e.tecnico || '—'} · ${fecha(e.actualizado)}</div>
               </div>
+              <div class="campana-flecha">›</div>
             </div>`).join('')
       : '<div class="campana-vacio">Todavía no hay ninguna toma de datos registrada.</div>';
 
@@ -82,6 +84,23 @@ const Resultados = (() => {
 
     $('#resultados-excel').disabled = todas.length === 0;
     $('#resultados-zip').disabled = todas.length === 0;
+
+    /* Tocar una toma de datos lleva al equipo en el mapa y abre el formulario
+       en el primer bloque que le falte. Sirve sobre todo para las que quedaron
+       a medias: desde acá se ve cuáles son y se va derecho a terminarlas. */
+    $('#resultados-cuerpo').querySelectorAll('[data-ver]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const cliente = await Campana.irACliente(el.dataset.set, el.dataset.alim, el.dataset.ver);
+        if (!cliente) {
+          AppBridge.showToast(
+            'No encuentro ese equipo en el mapa. Cargá el KMZ de ese alimentador y volvé a intentar.', 6000);
+          return;
+        }
+        AppBridge.closeSheet('#overlay-resultados');
+        AppBridge.closeSheet('#overlay-campana');
+        Encuesta.abrir(cliente);
+      });
+    });
   }
 
   function fecha(iso) {
@@ -234,5 +253,24 @@ const Resultados = (() => {
 window.Resultados = Resultados;
 
 document.querySelector('#btn-resultados').addEventListener('click', () => Resultados.abrir());
+/* El recorrido va acá y no en el mapa: es algo que se entrega, como el Excel. */
+document.querySelector('#resultados-geojson').addEventListener('click', () => {
+  if (!window.Ruta || !Ruta.cuantos()) {
+    AppBridge.showToast('Todavía no hay recorrido marcado en este alimentador.', 4000);
+    return;
+  }
+  const gj = Ruta.geojson();
+  const blob = new Blob([JSON.stringify(gj, null, 1)], { type: 'application/geo+json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `recorrido ${Campana.etiquetaActual() || ''}.geojson`.replace(/\s+/g, ' ').trim();
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  AppBridge.showToast(`Descargando el recorrido (${Ruta.cuantos()} puntos)`, 3000);
+});
+
 document.querySelector('#resultados-excel').addEventListener('click', () => Resultados.descargarExcel());
 document.querySelector('#resultados-zip').addEventListener('click', () => Resultados.descargarTodo());

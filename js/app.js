@@ -213,12 +213,35 @@
   }
 
   map.on('click', (e) => {
+    // Marcar la ubicación de un equipo se atiende primero: mientras el técnico
+    // está marcando, el toque es para eso y nada más debe reaccionar.
+    if (window.Ruta && Ruta.marcando()) { Ruta.tocoElMapa(e.latlng); return; }
     if (!selectMode) return;
     if (selectPoints.length !== 1) {
       setCorner1(e.latlng);
     } else {
       setCorner2(e.latlng);
     }
+  });
+
+  /* ---- Recorrido: el FAB solo lo muestra u oculta. Los puntos se marcan desde
+     el formulario, que es lo único que sabe de qué cliente y de qué equipo es
+     cada uno. ---- */
+  $('#btn-ruta').addEventListener('click', () => {
+    if (!Ruta.cuantos()) {
+      showToast('Todavía no hay recorrido. Se marca desde la toma de datos.', 4000);
+      return;
+    }
+    const visible = Ruta.alternarVisible();
+    showToast(visible ? 'Recorrido visible' : 'Recorrido oculto', 1500);
+  });
+  $('#ruta-cancelar').addEventListener('click', () => Ruta.cancelarMarcado());
+
+  Ruta.alCambiarPuntos((n, visible) => {
+    const badge = $('#ruta-badge');
+    badge.textContent = n;
+    badge.style.display = n ? 'flex' : 'none';
+    $('#btn-ruta').classList.toggle('active', n > 0 && visible);
   });
 
   // Vista previa en vivo del rectángulo: por mouse (desktop) y arrastrando el mapa (táctil).
@@ -714,249 +737,17 @@
     if (window.Campana) Campana.abrirSelector();
   });
 
-  // El panel "SET de trabajo" desapareció: exportar y limpiar la red importada
-  // a mano siguen estando en el panel de Red eléctrica base, y cambiar de zona
-  // ahora es simplemente elegir otra en la cascada.
+  /* El panel "Red eléctrica base" y su flujo de importación por carpetas se
+     eliminaron el 14/08/2026. Lo reemplazó la carga por alimentador de
+     campana.js, que guarda paquetes versionados por zona y capa.
 
-  /* ============ Red eléctrica base (postes, tramos, subestaciones) ============ */
-  const networkLayerGroups = {};
-  NetworkLayers.DEFS.forEach((def) => { networkLayerGroups[def.key] = L.layerGroup(); });
+     El FAB estaba marcado con hidden desde hacía semanas, pero nunca se
+     ocultó: .fab define display:flex y eso le gana al atributo. El panel
+     siguió accesible y su código llamaba a KmzParser.parseFile(), que dejó de
+     existir al reescribir el lector — de ahí el "parseFile is not a function".
 
-  function layerVisibilityKey(key) { return `catastro:netvis:${key}`; }
-  function isLayerVisible(key) {
-    const v = localStorage.getItem(layerVisibilityKey(key));
-    return v === null ? true : v === '1';
-  }
-  function setLayerVisible(key, visible) {
-    localStorage.setItem(layerVisibilityKey(key), visible ? '1' : '0');
-    if (visible) {
-      networkLayerGroups[key].addTo(map);
-    } else {
-      map.removeLayer(networkLayerGroups[key]);
-    }
-  }
-  // aplica la visibilidad guardada al iniciar
-  NetworkLayers.DEFS.forEach((def) => {
-    if (isLayerVisible(def.key)) networkLayerGroups[def.key].addTo(map);
-  });
-
-  function addFeatureToMap(feature) {
-    const def = NetworkLayers.defOf(feature.layer);
-    if (!def) return;
-    const group = networkLayerGroups[feature.layer];
-    if (feature.geomType === 'point') {
-      const m = L.circleMarker(feature.coords[0], {
-        radius: 6, weight: 1.5, color: '#ffffff', fillColor: def.color, fillOpacity: 1,
-      });
-      if (feature.name) m.bindTooltip(feature.name, { direction: 'top' });
-      group.addLayer(m);
-    } else {
-      const line = L.polyline(feature.coords, { color: def.color, weight: 3, opacity: 0.9 });
-      if (feature.name) line.bindTooltip(feature.name, { direction: 'top' });
-      group.addLayer(line);
-    }
-  }
-
-  async function loadAllNetworkFeaturesToMap() {
-    Object.values(networkLayerGroups).forEach((g) => g.clearLayers());
-    const all = await MapDB.getAllNetworkFeatures();
-    all.forEach(addFeatureToMap);
-  }
-
-  function clearNetworkLayersFromMap() {
-    Object.values(networkLayerGroups).forEach((g) => g.clearLayers());
-  }
-
-  async function refreshNetworkPanel() {
-    const counts = await MapDB.countNetworkFeaturesByLayer();
-    const total = Object.values(counts).reduce((a, b) => a + b, 0);
-    const badge = $('#network-badge');
-    if (total > 0) {
-      badge.style.display = 'flex';
-      badge.textContent = total > 999 ? '999+' : total;
-    } else {
-      badge.style.display = 'none';
-    }
-
-    const list = $('#network-layers-list');
-    list.innerHTML = '';
-    NetworkLayers.DEFS.forEach((def) => {
-      const n = counts[def.key] || 0;
-      const row = document.createElement('div');
-      row.className = 'network-layer-row';
-      row.innerHTML = `
-        <div class="layer-dot ${def.geom === 'line' ? 'dot-line' : ''}" style="background:${def.color};"></div>
-        <div class="layer-info">
-          <div class="layer-name">${def.label}</div>
-          <div class="layer-count ${n > 0 ? 'has-data' : ''}">${n > 0 ? n.toLocaleString('es-PE') + ' elementos' : 'sin datos'}</div>
-        </div>
-        <label class="switch">
-          <input type="checkbox" data-layer-toggle="${def.key}" ${isLayerVisible(def.key) ? 'checked' : ''} />
-          <span class="slider"></span>
-        </label>
-      `;
-      list.appendChild(row);
-    });
-    list.querySelectorAll('[data-layer-toggle]').forEach((input) => {
-      input.addEventListener('change', () => setLayerVisible(input.dataset.layerToggle, input.checked));
-    });
-  }
-
-  $('#btn-network').addEventListener('click', () => {
-    refreshNetworkPanel();
-    openSheet('#overlay-network');
-  });
-
-  (() => {
-    let confirming = false;
-    $('#network-clear-btn').addEventListener('click', async () => {
-      const btn = $('#network-clear-btn');
-      if (!confirming) {
-        confirming = true;
-        btn.textContent = '¿Seguro? Toca de nuevo para borrar todo';
-        setTimeout(() => { confirming = false; btn.textContent = '🗑 Limpiar red cargada'; }, 3500);
-        return;
-      }
-      confirming = false;
-      btn.textContent = '🗑 Limpiar red cargada';
-      await MapDB.clearAllNetworkFeatures();
-      clearNetworkLayersFromMap();
-      await refreshNetworkPanel();
-      showToast('Red eléctrica limpiada. Lista para cargar otra zona.');
-    });
-  })();
-
-  /* ---- Importar KMZ/KML ---- */
-  let pendingKmzFolders = [];
-  let pendingKmzFileName = '';
-
-  $('#network-load-btn').addEventListener('click', () => $('#network-file-input').click());
-  $('#network-export-btn').addEventListener('click', () => exportNetworkData());
-  $('#network-file-input').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    e.target.value = ''; // permite volver a elegir el mismo archivo después
-    if (file) await handleKmzFile(file);
-  });
-
-  async function handleKmzFile(file) {
-    showToast('Leyendo archivo…', 1500);
-    let parsed;
-    try {
-      parsed = await KmzParser.parseFile(file);
-    } catch (err) {
-      showToast('No se pudo leer el archivo: ' + err.message, 4000);
-      return;
-    }
-    if (!parsed.folders.length || parsed.totalCount === 0) {
-      showToast('No se encontraron postes, tramos o subestaciones en ese archivo.', 3500);
-      return;
-    }
-    pendingKmzFolders = parsed.folders;
-    pendingKmzFileName = file.name;
-    renderKmzMapSheet();
-  }
-
-  function renderKmzMapSheet() {
-    $('#kmz-summary').textContent =
-      `«${pendingKmzFileName}»: se encontraron ${pendingKmzFolders.reduce((s, f) => s + f.count, 0)} elementos en ${pendingKmzFolders.length} carpeta${pendingKmzFolders.length === 1 ? '' : 's'}. Confirma a qué capa pertenece cada una:`;
-
-    const list = $('#kmz-folder-list');
-    list.innerHTML = '';
-    pendingKmzFolders.forEach((folder, idx) => {
-      const compatibleDefs = NetworkLayers.DEFS.filter((d) => d.geom === folder.geomType);
-      const guess = folder.guess && compatibleDefs.some((d) => d.key === folder.guess) ? folder.guess : (compatibleDefs[0] ? compatibleDefs[0].key : '');
-      const options = compatibleDefs
-        .map((d) => `<option value="${d.key}" ${d.key === guess ? 'selected' : ''}>${d.label}</option>`)
-        .join('');
-      const row = document.createElement('div');
-      row.className = 'kmz-folder-row';
-      row.innerHTML = `
-        <div class="folder-name">${folder.name}</div>
-        <div class="folder-count">${folder.count} ${folder.geomType === 'point' ? 'punto(s)' : 'línea(s)'}</div>
-        <select data-folder-idx="${idx}">
-          <option value="">No importar esta carpeta</option>
-          ${options}
-        </select>
-      `;
-      list.appendChild(row);
-    });
-    openSheet('#overlay-kmz-map');
-  }
-
-  $('#kmz-import-confirm-btn').addEventListener('click', async () => {
-    const selects = $$('#kmz-folder-list select');
-    const activeSet = getActiveSet();
-    const features = [];
-    selects.forEach((sel) => {
-      const layerKey = sel.value;
-      if (!layerKey) return;
-      const folder = pendingKmzFolders[Number(sel.dataset.folderIdx)];
-      folder.items.forEach((item) => {
-        features.push({
-          id: NetworkLayers.makeId(),
-          setName: activeSet,
-          layer: layerKey,
-          geomType: item.geomType,
-          coords: item.coords,
-          name: item.name,
-          sourceFile: pendingKmzFileName,
-          importedAt: Date.now(),
-        });
-      });
-    });
-    if (features.length === 0) {
-      showToast('No seleccionaste ninguna capa para importar.');
-      return;
-    }
-    await MapDB.addNetworkFeatures(features);
-    features.forEach(addFeatureToMap);
-    await refreshNetworkPanel();
-    closeSheet('#overlay-kmz-map');
-    showToast(`Se importaron ${features.length.toLocaleString('es-PE')} elementos.`);
-    pendingKmzFolders = [];
-  });
-
-  /* ---- Exportar datos de la SET actual ---- */
-  async function exportNetworkData() {
-    const all = await MapDB.getAllNetworkFeatures();
-    if (all.length === 0) {
-      showToast('No hay datos de red cargados para descargar.');
-      return;
-    }
-    const geojson = {
-      type: 'FeatureCollection',
-      features: all.map((f) => {
-        const def = NetworkLayers.defOf(f.layer);
-        const geometry = f.geomType === 'point'
-          ? { type: 'Point', coordinates: [f.coords[0][1], f.coords[0][0]] }
-          : { type: 'LineString', coordinates: f.coords.map((c) => [c[1], c[0]]) };
-        return {
-          type: 'Feature',
-          geometry,
-          properties: {
-            name: f.name,
-            capa: def ? def.label : f.layer,
-            set: f.setName || getActiveSet(),
-            archivo_origen: f.sourceFile || '',
-            importado: new Date(f.importedAt).toISOString(),
-          },
-        };
-      }),
-    };
-    const setSlug = (getActiveSet() || 'red').replace(/[^a-z0-9]+/gi, '_');
-    const dateSlug = new Date().toISOString().slice(0, 10);
-    const filename = `${setSlug}_${dateSlug}.geojson`;
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    showToast(`Descargando ${filename} (${all.length.toLocaleString('es-PE')} elementos)`);
-  }
+     El store network_features de db.js se deja en su lugar: sacarlo obliga a
+     migrar la base y no gana nada. */
 
   /* ---- Recibe el archivo cuando llega por "Compartir" desde WhatsApp ---- */
   const SHARE_DB_NAME = 'catastro-share-handoff';
@@ -975,42 +766,88 @@
     });
   }
 
+  /* Compartir desde WhatsApp es la vía MÁS confiable en Android: el service
+     worker recibe los bytes dentro del POST, así que no hay ningún puntero a un
+     proveedor de documentos que pueda vencerse — que es lo que hace fallar al
+     selector de archivos con "el teléfono no pudo abrir el archivo".
+
+     Los archivos van a la carga por alimentador, la misma que usa el botón de
+     la app. Antes iban al flujo de "Red eléctrica base", que ya no existe. */
+  function leerBuzon() {
+    return openShareDB().then((db) => new Promise((resolve, reject) => {
+      const req = db.transaction(SHARE_STORE, 'readonly').objectStore(SHARE_STORE).get('latest');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    }));
+  }
+
+  function vaciarBuzon() {
+    return openShareDB().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(SHARE_STORE, 'readwrite');
+      tx.objectStore(SHARE_STORE).delete('latest');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    }));
+  }
+
+  /* Se revisa SIEMPRE al arrancar, no solo cuando viene ?sharedImport=1. Si el
+     técnico compartió los archivos y cerró la app antes de elegir el
+     alimentador, el parámetro se pierde pero los archivos siguen en el buzón:
+     así se cargan en el próximo arranque en vez de evaporarse. */
   async function checkPendingSharedFile() {
-    const params = new URLSearchParams(location.search);
-    if (params.get('sharedImport') !== '1') return;
-    // Limpia el parámetro de la URL para que un refresco no lo vuelva a procesar.
-    history.replaceState({}, '', location.pathname);
+    const recienCompartido = new URLSearchParams(location.search).get('sharedImport') === '1';
+    // Limpia el parámetro para que un refresco no repita el aviso.
+    if (recienCompartido) history.replaceState({}, '', location.pathname);
     try {
-      const db = await openShareDB();
-      const record = await new Promise((resolve, reject) => {
-        const tx = db.transaction(SHARE_STORE, 'readwrite');
-        const store = tx.objectStore(SHARE_STORE);
-        const getReq = store.get('latest');
-        getReq.onsuccess = () => { resolve(getReq.result || null); store.delete('latest'); };
-        getReq.onerror = () => reject(getReq.error);
-      });
-      if (!record) return;
-      const file = new File([record.buffer], record.name, { type: record.type });
-      if (!getActiveSet()) {
-        // hay que saber en qué SET estamos antes de importar la red
-        showToast('Primero indica con qué SET vas a trabajar.', 3000);
-        const onStart = async () => {
-          $('#set-start-btn').removeEventListener('click', onStart);
-          await handleKmzFile(file);
-        };
-        // se importa apenas el usuario confirme el nombre de la SET
-        $('#set-start-btn').addEventListener('click', onStart, { once: true });
-      } else {
-        await handleKmzFile(file);
-      }
+      const registros = await leerBuzon();
+      if (!registros) return;
+
+      // Antes se guardaba un solo archivo; ahora una lista. Se acepta el formato
+      // viejo por si quedó algo pendiente de una versión anterior.
+      const lista = Array.isArray(registros) ? registros : [registros];
+      const archivos = lista
+        .filter((r) => r && r.buffer)
+        .map((r) => new File([r.buffer], r.name, { type: r.type }));
+      if (!archivos.length) { await vaciarBuzon(); return; }
+
+      await importarCompartidos(archivos);
     } catch (e) {
       console.warn('No se pudo procesar el archivo compartido:', e);
     }
   }
 
+  /* Los KMZ se cargan dentro de un alimentador. Si el técnico compartió los
+     archivos antes de elegir en qué zona trabaja, no hay dónde ponerlos: se
+     avisa, se abre la zona de trabajo y se importan apenas la elija.
+
+     El buzón se vacía DESPUÉS de importar, nunca antes: si se vaciara al leer y
+     el técnico no llegara a elegir zona, los archivos se perderían en silencio
+     y él creería que ya los cargó. */
+  async function importarCompartidos(archivos) {
+    // Hay que esperar a que campana.js restaure la zona guardada, o siempre
+    // parece que no hay ninguna elegida.
+    if (window.Campana && Campana.listo) await Campana.listo;
+
+    const cuantos = archivos.length === 1
+      ? `«${archivos[0].name}»`
+      : `${archivos.length} archivos`;
+
+    const cargar = async () => {
+      await Campana.importarArchivos(archivos);
+      await vaciarBuzon();
+    };
+
+    if (!window.Campana || !Campana.hayZonaElegida()) {
+      showToast(`${cuantos} recibido(s). Elegí el alimentador donde cargarlos.`, 8000);
+      if (window.Campana) Campana.abrirSelector({ alElegirZona: cargar });
+      return;
+    }
+    showToast(`${cuantos} recibido(s) desde Compartir. Cargando…`, 3000);
+    await cargar();
+  }
+
   /* ============ Inicialización ============ */
   updateConnectionStatus();
-  loadAllNetworkFeaturesToMap();
   // La zona de trabajo la abre campana.js al iniciar (ver index.html).
   checkPendingSharedFile();
 

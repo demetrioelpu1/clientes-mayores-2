@@ -22,6 +22,13 @@ const Encuesta = (() => {
   let pasos = [];          // lista plana: {bloque, paso}
   let indice = 0;
   let cliente = null;
+
+  /* El número de inspección. Es el orden en que el técnico va trabajando los
+     clientes, y es el MISMO para los tres puntos que marca de ese cliente
+     (trafomix, medidor y transformador): los tres son de la inspección n.º 3.
+     Coincide con la fila del Excel. Una vez asignado no se mueve. */
+  let orden = 0;
+  let puntos = {};        // { bloque: punto } de este cliente
   let datos = null;        // { bloque: { campo: valor } }
   let fotos = null;        // { "bloque/idFoto": true } — los Blobs viven en IndexedDB
   let guardadoPendiente = null;
@@ -49,11 +56,23 @@ const Encuesta = (() => {
     const guardada = await MapDB.getEncuesta(cliente.sed);
     datos = guardada ? guardada.datos : {};
     fotos = guardada ? guardada.fotos || {} : {};
+    orden = guardada && guardada.orden ? guardada.orden : await siguienteOrden();
+    puntos = await MapDB.getPuntosDeToma(cliente.sed);
 
     autocompletar();
     indice = primerPasoIncompleto();
     render();
     AppBridge.openSheet('#overlay-encuesta');
+  }
+
+  /* El siguiente número libre del alimentador. Si el técnico abre una toma y la
+     abandona sin escribir nada, no se guarda registro y el número se reutiliza:
+     así no quedan huecos por curiosear una ficha. */
+  async function siguienteOrden() {
+    const todas = await MapDB.getAllEncuestas();
+    const delAlim = todas.filter((e) => e.setSlug === cliente.setSlug
+      && e.alimentador === cliente.alimentador);
+    return delAlim.reduce((max, e) => Math.max(max, e.orden || 0), 0) + 1;
   }
 
   /* Al continuar una toma de datos a medias, se abre en el primer bloque que
@@ -128,8 +147,8 @@ const Encuesta = (() => {
     $('#encuesta-barra-relleno').style.width = `${((indice + 1) / esquema.bloques.length) * 100}%`;
 
     const grupos = bloque.pasos.map((paso) => renderGrupo(bloque, paso)).join('');
-    $('#encuesta-cuerpo').innerHTML =
-      grupos + (indice === 0 ? '<div class="auto-ficha" id="encuesta-auto"></div>' : '');
+    $('#encuesta-cuerpo').innerHTML = renderMarca(bloque)
+      + grupos + (indice === 0 ? '<div class="auto-ficha" id="encuesta-auto"></div>' : '');
 
     $('#encuesta-atras').disabled = indice === 0;
     $('#encuesta-siguiente').textContent =
@@ -139,6 +158,64 @@ const Encuesta = (() => {
     conectar();
     actualizarProgreso();
     bloque.pasos.forEach((paso) => { if (paso.fotos) pintarFotosGuardadas(bloque, paso); });
+  }
+
+  /* Los tres equipos que se visitan físicamente llevan su punto en el mapa. El
+     cliente y las observaciones no: no son un lugar al que se camina. */
+  const BLOQUES_CON_PUNTO = {
+    trafomix: 'el trafomix',
+    medidor: 'el sistema de medición',
+    transformador: 'el transformador',
+  };
+
+  function renderMarca(bloque) {
+    const que = BLOQUES_CON_PUNTO[bloque.id];
+    if (!que) return '';
+    const p = puntos[bloque.id];
+    if (p) {
+      const prec = p.gps && p.gps.precision !== undefined ? ` · GPS ±${p.gps.precision} m` : '';
+      return `
+        <div class="marca-fila marcada">
+          <span class="marca-chapa">${orden}</span>
+          <div class="marca-texto">
+            <div class="marca-titulo">Ubicación marcada</div>
+            <div class="marca-sub">${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}${prec}</div>
+          </div>
+          <button class="mini" id="btn-marcar">Rehacer</button>
+        </div>`;
+    }
+    return `
+      <div class="marca-fila">
+        <span class="marca-chapa vacia">${orden}</span>
+        <div class="marca-texto">
+          <div class="marca-titulo">Falta marcar dónde está ${que}</div>
+          <div class="marca-sub">Va a quedar como el punto ${orden} del recorrido</div>
+        </div>
+        <button class="btn-primary" id="btn-marcar">Marcar en el mapa</button>
+      </div>`;
+  }
+
+  /* Se corre el formulario, el técnico toca el mapa donde está el equipo y
+     vuelve. El toque manda: puede estar del otro lado de un alambrado y el
+     equipo a 15 m. El GPS se guarda igual, como respaldo y control. */
+  async function marcarEnMapa() {
+    const bloque = esquema.bloques[indice];
+    if (!BLOQUES_CON_PUNTO[bloque.id]) return;
+
+    await guardarYa();          // que el número quede tomado antes de salir
+    AppBridge.closeSheet('#overlay-encuesta');
+
+    const punto = await Ruta.marcar({
+      sed: cliente.sed,
+      bloque: bloque.id,
+      orden,
+      que: BLOQUES_CON_PUNTO[bloque.id],
+      etiqueta: cliente.etiqueta || cliente.sed,
+    });
+
+    if (punto) puntos[bloque.id] = punto;
+    AppBridge.openSheet('#overlay-encuesta');
+    render();
   }
 
   function renderGrupo(bloque, paso) {
@@ -269,6 +346,9 @@ const Encuesta = (() => {
   /* ----------------------------------------------------------------- eventos */
 
   function conectar() {
+    const btnMarcar = $('#btn-marcar');
+    if (btnMarcar) btnMarcar.addEventListener('click', marcarEnMapa);
+
     $('#encuesta-cuerpo').querySelectorAll('[data-campo]').forEach((el) => {
       el.addEventListener('input', () => {
         const b = el.dataset.bloque;
@@ -412,6 +492,7 @@ const Encuesta = (() => {
   function registro() {
     return {
       sed: cliente.sed,
+      orden,
       setSlug: cliente.setSlug || '',
       alimentador: cliente.alimentador || '',
       etiqueta: cliente.etiqueta || '',
@@ -433,6 +514,14 @@ const Encuesta = (() => {
         resolve();
       }, 400);
     });
+  }
+
+  /* Guarda sin esperar los 400 ms del autoguardado. Hace falta antes de salir
+     del formulario a marcar en el mapa: si no, el registro todavía no existe y
+     otro cliente podría llevarse el mismo número de inspección. */
+  async function guardarYa() {
+    clearTimeout(guardadoPendiente);
+    await MapDB.putEncuesta(registro());
   }
 
   async function cerrar() {
