@@ -489,8 +489,16 @@
             },
             {
               "n": 6,
-              "id": "foto_mediciones",
-              "label": "Mediciones"
+              "id": "mediciones",
+              "label": "Mediciones",
+              "multiple": true,
+              "minimo": 6
+            },
+            {
+              "n": 7,
+              "id": "extra",
+              "label": "Foto extra",
+              "multiple": true
             }
           ]
         }
@@ -680,8 +688,16 @@
             },
             {
               "n": 6,
-              "id": "foto_mediciones",
-              "label": "Mediciones"
+              "id": "mediciones",
+              "label": "Mediciones",
+              "multiple": true,
+              "minimo": 6
+            },
+            {
+              "n": 7,
+              "id": "extra",
+              "label": "Foto extra",
+              "multiple": true
             }
           ]
         }
@@ -771,8 +787,16 @@
             },
             {
               "n": 3,
-              "id": "foto_mediciones",
-              "label": "Mediciones"
+              "id": "mediciones",
+              "label": "Mediciones",
+              "multiple": true,
+              "minimo": 6
+            },
+            {
+              "n": 4,
+              "id": "extra",
+              "label": "Foto extra",
+              "multiple": true
             }
           ]
         }

@@ -255,15 +255,31 @@ const Resultados = (() => {
       const carpeta = nombreCarpeta(e);
       for (const clave of Object.keys(e.fotos || {})) {
         const [bloqueId, fotoId] = clave.split('/');
-        const blob = await MapDB.getFoto(MapDB.fotoKey(e.sed, bloqueId, fotoId));
-        if (!blob) continue;
+        const valor = e.fotos[clave];
         const { n, label } = etiquetaFoto(bloqueId, fotoId);
         const limpio = label.replace(/[\\/:*?"<>|]/g, '-');
+        const base = MapDB.fotoKey(e.sed, bloqueId, fotoId);
         /* El nombre del archivo lleva el identificador del equipo además de la
            carpeta: si una foto se saca de su carpeta —se reenvía suelta por
            WhatsApp, se copia a otro lado— tiene que seguir diciendo de quién es. */
-        const nombre = `fotos/${carpeta}/${identificador(e)} - ${bloqueId} ${String(n).padStart(2, '0')} ${limpio}.jpg`;
-        entradas[nombre] = new Uint8Array(await blob.arrayBuffer());
+        const nombreBase = `fotos/${carpeta}/${identificador(e)} - ${bloqueId} ${String(n).padStart(2, '0')} ${limpio}`;
+
+        // "mediciones"/"extra" son grupos: cero, una o varias fotos guardadas
+        // como lista de sub-ids, no una sola como el resto de los campos.
+        const subIds = Array.isArray(valor) ? valor : null;
+        if (subIds) {
+          for (let i = 0; i < subIds.length; i++) {
+            const blob = await MapDB.getFoto(`${base}/${subIds[i]}`);
+            if (!blob) continue;
+            entradas[`${nombreBase} ${i + 1}.jpg`] = new Uint8Array(await blob.arrayBuffer());
+            nFotos++;
+          }
+          continue;
+        }
+
+        const blob = await MapDB.getFoto(base);
+        if (!blob) continue;
+        entradas[`${nombreBase}.jpg`] = new Uint8Array(await blob.arrayBuffer());
         nFotos++;
       }
     }

@@ -382,6 +382,7 @@ const Encuesta = (() => {
 
   function renderFoto(bloque, foto) {
     const clave = `${bloque.id}/${foto.id}`;
+    if (foto.multiple) return renderFotoMultiple(foto, clave);
     const tomada = !!fotos[clave];
     return `
       <div class="foto ${tomada ? 'tomada' : ''}" data-foto="${clave}">
@@ -390,6 +391,33 @@ const Encuesta = (() => {
         <input type="file" accept="image/*" capture="environment"
                data-input-foto="${clave}" style="display:none" />
       </div>`;
+  }
+
+  /* Fotos que se pueden sacar varias veces (mediciones, extra): una casilla
+     por cada foto ya sacada -con su cruz para quitarla- más una casilla "+"
+     al final para seguir agregando. Si tiene mínimo, la casilla "+" avisa
+     cuántas faltan; si no (la de "extra"), no exige nada. */
+  function renderFotoMultiple(foto, clave) {
+    const subIds = Array.isArray(fotos[clave]) ? fotos[clave] : [];
+    const tomadas = subIds.map((subId, i) => `
+      <div class="foto tomada" data-foto-multi="${clave}/${subId}">
+        <div class="foto-vista" data-vista-multi="${clave}/${subId}">
+          <span class="foto-numero">${i + 1}</span>
+          <button type="button" class="foto-quitar" data-quitar-foto="${clave}/${subId}" aria-label="Quitar foto">✕</button>
+        </div>
+        <div class="foto-label">${foto.label}</div>
+      </div>`).join('');
+    const requerido = foto.minimo || 0;
+    const faltan = requerido ? Math.max(0, requerido - subIds.length) : 0;
+    const etiquetaMas = faltan ? `Faltan ${faltan}` : (requerido ? 'Agregar' : foto.label);
+    const agregar = `
+      <div class="foto agregar" data-foto="${clave}">
+        <div class="foto-vista" data-agregar-foto="${clave}"><span class="foto-mas">＋</span></div>
+        <div class="foto-label">${etiquetaMas}</div>
+        <input type="file" accept="image/*" capture="environment"
+               data-input-foto-multi="${clave}" style="display:none" />
+      </div>`;
+    return tomadas + agregar;
   }
 
   /* ----------------------------------------------------------------- eventos */
@@ -437,6 +465,44 @@ const Encuesta = (() => {
           AppBridge.showToast('No se pudo guardar la foto: ' + e.message, 3500);
         }
         input.value = '';
+      });
+    });
+
+    $('#encuesta-cuerpo').querySelectorAll('[data-agregar-foto]').forEach((el) => {
+      el.addEventListener('click', () => $(`[data-input-foto-multi="${el.dataset.agregarFoto}"]`).click());
+    });
+
+    $('#encuesta-cuerpo').querySelectorAll('[data-input-foto-multi]').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const archivo = input.files && input.files[0];
+        if (!archivo) return;
+        const clave = input.dataset.inputFotoMulti;
+        const [bloque, idFoto] = clave.split('/');
+        try {
+          const blob = await comprimir(archivo);
+          const subId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+          await MapDB.putFoto(`${MapDB.fotoKey(cliente.sed, bloque, idFoto)}/${subId}`, blob);
+          fotos[clave] = (Array.isArray(fotos[clave]) ? fotos[clave] : []).concat(subId);
+          await guardar();
+          render();   // el grid entero corre un lugar: no alcanza con pintar una casilla
+        } catch (e) {
+          AppBridge.showToast('No se pudo guardar la foto: ' + e.message, 3500);
+        }
+        input.value = '';
+      });
+    });
+
+    $('#encuesta-cuerpo').querySelectorAll('[data-quitar-foto]').forEach((el) => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const partes = el.dataset.quitarFoto.split('/');
+        const subId = partes.pop();
+        const clave = partes.join('/');
+        const [bloque, idFoto] = clave.split('/');
+        await MapDB.deleteFoto(`${MapDB.fotoKey(cliente.sed, bloque, idFoto)}/${subId}`);
+        fotos[clave] = (fotos[clave] || []).filter((x) => x !== subId);
+        await guardar();
+        render();
       });
     });
   }
@@ -511,9 +577,22 @@ const Encuesta = (() => {
     vista.closest('.foto').classList.add('tomada');
   }
 
+  function mostrarFotoMulti(claveSub, blob) {
+    const vista = $(`[data-vista-multi="${claveSub}"]`);
+    if (vista) vista.style.backgroundImage = `url(${URL.createObjectURL(blob)})`;
+  }
+
   async function pintarFotosGuardadas(bloque, paso) {
     for (const f of paso.fotos) {
       const clave = `${bloque.id}/${f.id}`;
+      if (f.multiple) {
+        const subIds = Array.isArray(fotos[clave]) ? fotos[clave] : [];
+        for (const subId of subIds) {
+          const blob = await MapDB.getFoto(`${MapDB.fotoKey(cliente.sed, bloque.id, f.id)}/${subId}`);
+          if (blob) mostrarFotoMulti(`${clave}/${subId}`, blob);
+        }
+        continue;
+      }
       if (!fotos[clave]) continue;
       const blob = await MapDB.getFoto(MapDB.fotoKey(cliente.sed, bloque.id, f.id));
       if (blob) mostrarFoto(clave, blob);
@@ -545,8 +624,24 @@ const Encuesta = (() => {
       return v !== undefined && v !== null && String(v).trim() !== '';
     }).length;
     const listaFotos = paso.fotos || [];
-    const fotosOk = listaFotos.filter((f) => fotos[`${bloque.id}/${f.id}`]).length;
-    return { llenos, total: campos.length, fotos: fotosOk, totalFotos: listaFotos.length };
+    let fotosOk = 0, totalFotos = 0;
+    listaFotos.forEach((f) => {
+      const val = fotos[`${bloque.id}/${f.id}`];
+      if (f.multiple) {
+        // El mínimo es lo que se exige para completar; de ahí para arriba es
+        // libre, así que no cuenta más que eso (si no, nunca se llegaría a
+        // "completa" con solo 6: el técnico podría seguir agregando). Si no
+        // tiene mínimo (la de "extra") no exige nada, no bloquea el avance.
+        const requerido = f.minimo || 0;
+        if (!requerido) return;
+        totalFotos += requerido;
+        fotosOk += Math.min(requerido, Array.isArray(val) ? val.length : 0);
+      } else {
+        totalFotos += 1;
+        if (val) fotosOk += 1;
+      }
+    });
+    return { llenos, total: campos.length, fotos: fotosOk, totalFotos };
   }
 
   function pasoCompleto(p) {

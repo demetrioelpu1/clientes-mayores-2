@@ -862,6 +862,30 @@ html, body {
 }
 .foto.tomada .foto-label { color: var(--green); }
 
+/* Casilla "+" para agregar a un grupo de fotos (mediciones, extra): mismo
+   tamaño que las demás, pero con el signo en vez de un número y el borde en
+   el color de acento para que se distinga de "todavía no la saqué". */
+.foto.agregar .foto-vista { border-color: var(--accent); cursor: pointer; }
+.foto-mas { font-size: 22px; font-weight: 700; color: var(--accent); }
+
+/* Cruz para quitar una foto ya sacada de un grupo. Flota en la esquina de la
+   miniatura: con el dedo hay que poder tocarla sin acertarle a la foto. */
+.foto-quitar {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--dark);
+  background: #f0645a;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+}
+
 /* ---------- Navegación táctil: flecha de Atrás en los paneles ----------
    Las migas de pan son texto de 11 px: en un celular no se aciertan con el
    pulgar. La flecha es el camino principal para volver; las migas quedan
