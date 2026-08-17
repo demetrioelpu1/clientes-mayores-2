@@ -147,9 +147,16 @@ const Campana = (() => {
     const latlng = await Ruta.pedirUbicacion(`Tocá en el mapa dónde está ${que} que falta`);
     if (!latlng) { abrirSelector(); return; }   // si cancela, vuelve donde estaba
 
-    const yaHay = (await MapDB.getAllEncuestas())
-      .filter((e) => e.nuevo && e.alimentador === alimentador).length;
-    const sed = `NUEVO-${alimentador}-${String(yaHay + 1).padStart(2, '0')}`;
+    // Usa el máximo número ya usado, no la cantidad de equipos que hay: si se
+    // borró alguno de por medio, contar por cantidad podía generar un código
+    // ya usado y machacar en silencio los datos del equipo que lo tenía
+    // (el sed es la clave del registro en IndexedDB).
+    const usados = (await MapDB.getAllEncuestas())
+      .filter((e) => e.nuevo && e.alimentador === alimentador)
+      .map((e) => parseInt((String(e.sed).match(/-(\d+)$/) || [])[1], 10))
+      .filter((n) => !isNaN(n));
+    const siguiente = usados.length ? Math.max(...usados) + 1 : 1;
+    const sed = `NUEVO-${alimentador}-${String(siguiente).padStart(2, '0')}`;
 
     const cliente = {
       sed, tipo, nuevo: true, setSlug: setActual.slug,
@@ -606,6 +613,12 @@ const Campana = (() => {
 
     const filas = clientes.map((c) => {
       const estado = estadoDe(c);
+      // Un equipo "nuevo" (＋Trafomix/＋SED) no tiene respaldo en el GIS: si el
+      // técnico lo cargó por error o solo estaba probando, tiene que poder
+      // sacarlo de la lista. Los del GIS no se borran, siempre están ahí.
+      const acciones = c.nuevo
+        ? `<button class="mini peligro" data-borrar-nuevo="${c.sed}">Borrar</button>`
+        : '<div class="campana-flecha">›</div>';
       return `
         <div class="campana-fila cliente" data-cliente="${c.sed}">
           <div class="estado-punto ${estado}"></div>
@@ -614,7 +627,7 @@ const Campana = (() => {
               c.nuevo ? ' <span class="chip-nuevo">no está en el GIS</span>' : ''}</div>
             <div class="campana-detalle">${c.etiqueta || c.sed}${c.potencia_kva ? ' · ' + c.potencia_kva : ''}</div>
           </div>
-          <div class="campana-flecha">›</div>
+          ${acciones}
         </div>`;
     }).join('');
 
@@ -671,6 +684,27 @@ const Campana = (() => {
     $('#campana-cuerpo').querySelectorAll('[data-cliente]').forEach((el) => {
       el.addEventListener('click', () => abrirFicha(el.dataset.cliente));
     });
+    $('#campana-cuerpo').querySelectorAll('[data-borrar-nuevo]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();   // que no abra la ficha del cliente al tocar el botón
+        borrarEquipoNuevo(el.dataset.borrarNuevo);
+      });
+    });
+  }
+
+  /* Saca de la app un equipo "nuevo" completo: su toma de datos, sus fotos y
+     los puntos que tuviera marcados en el recorrido. Sin confirmación, como el
+     resto de los borrados de la app — y con el mismo motivo: es reversible
+     dándolo de alta de nuevo si hizo falta, y un diálogo de más estorba en el
+     cerro. */
+  async function borrarEquipoNuevo(sed) {
+    await MapDB.deleteEncuesta(sed);
+    if (window.Ruta) await Ruta.borrarTodos(sed);
+    await cargarCapasDeZona();
+    redibujar();
+    actualizarSubtitulo();
+    refrescarVista();
+    AppBridge.showToast('Equipo borrado');
   }
 
   /* -------------------------------------------------------- cargas por capa */

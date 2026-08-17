@@ -62,6 +62,18 @@ const Encuesta = (() => {
     orden = guardada && guardada.orden ? guardada.orden : await siguienteOrden();
     puntos = await MapDB.getPuntosDeToma(cliente.sed);
 
+    // El equipo nuevo (＋Trafomix/＋SED) ya trae su ubicación: es el toque con
+    // el que el técnico lo dio de alta. Ese toque ES el punto del trafomix —
+    // pedirlo de nuevo en el formulario sería marcar el mismo lugar dos veces,
+    // y de paso dejaría a este equipo fuera de la línea del recorrido hasta
+    // que alguien lo marcara a mano.
+    if (cliente.nuevo && !puntos.trafomix && cliente.lat != null && cliente.lon != null) {
+      puntos.trafomix = await Ruta.guardarPuntoDirecto(
+        { sed: cliente.sed, bloque: 'trafomix', orden, etiqueta: cliente.etiqueta || cliente.sed },
+        { lat: cliente.lat, lng: cliente.lon }
+      );
+    }
+
     autocompletar();
     // Siempre se abre desplegado, aunque la vez anterior se hubiera minimizado.
     document.querySelector('#overlay-encuesta').classList.remove('minimizado');

@@ -271,9 +271,33 @@ const Ruta = (() => {
     return true;
   }
 
+  /* Bloques que hoy pueden tener un punto propio. El medidor tuvo el suyo en
+     una versión anterior (compartía poste con el trafomix, pero se marcaba
+     aparte) y quedaron puntos de esos tiempos en algunos celulares: el
+     formulario no tiene ninguna pantalla que los muestre desde que el medidor
+     pasó a compartir el punto del trafomix, así que no había forma de
+     borrarlos. Se limpian solos al entrar a la zona. */
+  const BLOQUES_VALIDOS = new Set(['trafomix', 'transformador']);
+
+  /* Borra todos los puntos de un equipo (cualquier bloque), sin el aviso por
+     punto de borrar(): lo usa borrar el equipo entero desde la lista, donde
+     avisar "podés volver a marcarlo" no tendría sentido porque el equipo ya
+     no va a existir. */
+  async function borrarTodos(sed) {
+    const propios = puntos.filter((p) => p.sed === sed);
+    for (const p of propios) await MapDB.deletePuntoRuta(p.id);
+    puntos = puntos.filter((p) => p.sed !== sed);
+    redibujar();
+  }
+
   async function cargarZona(nuevaZona) {
     zona = nuevaZona;
     puntos = zona ? await MapDB.getRutaDeZona(zona) : [];
+    const huerfanos = puntos.filter((p) => !BLOQUES_VALIDOS.has(p.bloque));
+    if (huerfanos.length) {
+      for (const p of huerfanos) await MapDB.deletePuntoRuta(p.id);
+      puntos = puntos.filter((p) => BLOQUES_VALIDOS.has(p.bloque));
+    }
     grafo = null;
     redibujar();
   }
@@ -319,8 +343,15 @@ const Ruta = (() => {
   function cuantos() { return puntos.length; }
   function alCambiarPuntos(fn) { alCambiar = fn; }
 
-  return { cargarZona, marcar, borrar, pedirUbicacion, cancelarMarcado, marcando,
-           tocoElMapa, alternarVisible, geojson, cuantos, alCambiarPuntos, redibujar };
+  /* Registra un punto con una ubicación que YA se tiene (no pide tocar el
+     mapa). La usa el alta de un equipo nuevo: el toque con el que el técnico
+     marcó dónde está el equipo es el mismo punto del trafomix, pedirlo de
+     nuevo adentro del formulario sería tocar dos veces el mismo lugar. */
+  function guardarPuntoDirecto(ctx, latlng) { return guardarPunto(ctx, latlng); }
+
+  return { cargarZona, marcar, guardarPuntoDirecto, borrar, borrarTodos, pedirUbicacion,
+           cancelarMarcado, marcando, tocoElMapa, alternarVisible, geojson, cuantos,
+           alCambiarPuntos, redibujar };
 })();
 
 window.Ruta = Ruta;

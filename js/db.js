@@ -399,7 +399,7 @@ async function getRutaDeZona(zona) {
   const store = await tx(STORE_RUTA, 'readonly');
   return new Promise((resolve, reject) => {
     const req = store.index('zona').getAll(zona);
-    req.onsuccess = () => resolve((req.result || []).sort((a, b) => a.n - b.n));
+    req.onsuccess = () => resolve((req.result || []).sort((a, b) => a.orden - b.orden));
     req.onerror = () => reject(req.error);
   });
 }
