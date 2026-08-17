@@ -429,7 +429,43 @@ const Encuesta = (() => {
     });
   }
 
-  /* Redimensiona y recomprime en el propio celular antes de guardar. */
+  /* Sello de fecha/hora/coordenadas quemado en la foto, pedido por el
+     ingeniero: a diferencia de un campo del formulario, viaja con la imagen
+     aunque se reenvíe suelta. Franja abajo a la izquierda, como las cámaras
+     viejas. Las coordenadas son las del GPS al momento de la foto (no las
+     del GIS, que son el dato viejo que la campaña verifica). */
+  function timbrarFoto(lienzo) {
+    const ctx = lienzo.getContext('2d');
+    const ahora = new Date();
+    const lineas = [
+      `${ahora.toLocaleDateString('es-PE')} ${ahora.toLocaleTimeString('es-PE', { hour12: false })}`,
+    ];
+    const pos = window.AppBridge && AppBridge.getGpsActual && AppBridge.getGpsActual();
+    if (pos) {
+      const { latitude, longitude, accuracy } = pos.coords;
+      lineas.push(`${latitude.toFixed(6)}, ${longitude.toFixed(6)} ±${Math.round(accuracy)} m`);
+    } else {
+      lineas.push('GPS sin señal');
+    }
+
+    const fontSize = Math.max(16, Math.round(lienzo.width * 0.026));
+    const lineHeight = Math.round(fontSize * 1.35);
+    const pad = Math.round(fontSize * 0.5);
+    const franja = lineHeight * lineas.length + pad * 2;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, lienzo.height - franja, lienzo.width, franja);
+
+    ctx.font = `600 ${fontSize}px sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'bottom';
+    lineas.forEach((linea, i) => {
+      const y = lienzo.height - pad - (lineas.length - 1 - i) * lineHeight;
+      ctx.fillText(linea, pad, y);
+    });
+  }
+
+  /* Redimensiona, recomprime y timbra en el propio celular antes de guardar. */
   function comprimir(archivo) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -441,6 +477,7 @@ const Encuesta = (() => {
         lienzo.width = Math.round(img.width * escala);
         lienzo.height = Math.round(img.height * escala);
         lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
+        timbrarFoto(lienzo);
         lienzo.toBlob(
           (blob) => (blob ? resolve(blob) : reject(new Error('el navegador no pudo comprimirla'))),
           'image/jpeg',

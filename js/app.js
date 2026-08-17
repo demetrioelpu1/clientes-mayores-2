@@ -185,6 +185,9 @@
     map, showToast, openSheet, closeSheet, alCerrarPanel,
     // fn() debe devolver true si consumió el "atrás"
     registrarAtras: (fn) => manejadoresAtras.push(fn),
+    // Última posición del GPS (objeto GeolocationPosition) o null si no hay
+    // señal todavía. La usa encuesta.js para timbrar las fotos.
+    getGpsActual: () => lastPosition,
   };
 
   /* ============ Panel de capas ============ */
