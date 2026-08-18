@@ -119,6 +119,20 @@ const Resultados = (() => {
       if (c.latitud === undefined || c.latitud === null) return '';
       return `${c.latitud}, ${c.longitud}`;
     }
+    if (col.origen === 'observaciones') {
+      // No es un campo de texto único: es la lista que arma el técnico. Van
+      // todas juntas en la misma columna (no se agrega una 49.ª), numeradas
+      // como texto — es la única forma sin tocar el formato de 48 columnas.
+      // El número es la posición real en la lista, la misma que llevan sus
+      // fotos en el .zip, así "Observación 2" dice lo mismo en los dos lados
+      // aunque alguna observación se haya quedado sin texto (solo fotos).
+      const lista = ((encuesta.datos.observaciones || {}).lista) || [];
+      return lista
+        .map((o, i) => ({ n: i + 1, texto: (o.texto || '').trim() }))
+        .filter((o) => o.texto)
+        .map((o) => `${o.n}. ${o.texto}`)
+        .join('\n');
+    }
     if (!col.campo) return '';
 
     const [bloque, campo] = col.campo.split('.');
@@ -231,7 +245,16 @@ const Resultados = (() => {
     return base.replace(/[\\/:*?"<>|]/g, '-').slice(0, 60);
   }
 
-  function etiquetaFoto(bloqueId, fotoId) {
+  function etiquetaFoto(bloqueId, fotoId, e) {
+    // Las fotos de una observación no salen de un esquema fijo: la lista la
+    // arma el técnico. El número es la posición real en esa lista, la misma
+    // que ya lleva en la columna OBSERVACIÓN del Excel.
+    if (bloqueId === 'observaciones' && fotoId.startsWith('obs_')) {
+      const obsId = fotoId.slice(4);
+      const lista = ((e.datos.observaciones || {}).lista) || [];
+      const i = lista.findIndex((o) => o.id === obsId);
+      return { n: i + 1, label: i >= 0 ? `Observación ${i + 1}` : 'Observación' };
+    }
     for (const b of esquema.bloques) {
       if (b.id !== bloqueId) continue;
       for (const p of b.pasos) {
@@ -256,7 +279,7 @@ const Resultados = (() => {
       for (const clave of Object.keys(e.fotos || {})) {
         const [bloqueId, fotoId] = clave.split('/');
         const valor = e.fotos[clave];
-        const { n, label } = etiquetaFoto(bloqueId, fotoId);
+        const { n, label } = etiquetaFoto(bloqueId, fotoId, e);
         const limpio = label.replace(/[\\/:*?"<>|]/g, '-');
         const base = MapDB.fotoKey(e.sed, bloqueId, fotoId);
         /* El nombre del archivo lleva el identificador del equipo además de la

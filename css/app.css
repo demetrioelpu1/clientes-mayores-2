@@ -886,6 +886,38 @@ html, body {
   cursor: pointer;
 }
 
+/* ---------- Observaciones: lista libre, no un campo fijo ----------
+   Cada una es texto + su propio grupo de fotos (mismas piezas que "mediciones"
+   y "extra"). Sin mínimo: la mayoría de los clientes no tienen nada raro que
+   reportar, así que 0 observaciones no bloquea la toma de datos. */
+.observaciones-lista { display: flex; flex-direction: column; gap: 14px; margin-bottom: 14px; }
+.observacion {
+  border: 1px solid #3a3b44;
+  border-radius: 9px;
+  padding: 10px;
+  background: #1e1f25;
+}
+.observacion-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.observacion-num { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.observacion textarea {
+  width: 100%;
+  padding: 11px;
+  font-size: 15px;
+  border-radius: 9px;
+  border: 1px solid #3a3b44;
+  background: #26272e;
+  color: var(--text);
+  font-family: inherit;
+  margin-bottom: 10px;
+  resize: vertical;
+}
+.observacion textarea:focus { outline: none; border-color: var(--accent); }
+
 /* ---------- Navegación táctil: flecha de Atrás en los paneles ----------
    Las migas de pan son texto de 11 px: en un celular no se aciertan con el
    pulgar. La flecha es el camino principal para volver; las migas quedan

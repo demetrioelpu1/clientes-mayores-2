@@ -176,7 +176,10 @@ const Encuesta = (() => {
     if (indice === 0) pintarAutomaticos();
     conectar();
     actualizarProgreso();
-    bloque.pasos.forEach((paso) => { if (paso.fotos) pintarFotosGuardadas(bloque, paso); });
+    bloque.pasos.forEach((paso) => {
+      if (paso.fotos) pintarFotosGuardadas(bloque, paso);
+      if (paso.observaciones) pintarFotosObservaciones(bloque);
+    });
   }
 
   /* Los lugares a los que el técnico camina. El cliente y las observaciones no
@@ -269,7 +272,9 @@ const Encuesta = (() => {
 
   function renderGrupo(bloque, paso) {
     const ayuda = paso.ayuda ? `<div class="grupo-ayuda">${paso.ayuda}</div>` : '';
-    const cuerpo = paso.fotos
+    const cuerpo = paso.observaciones
+      ? renderObservaciones(bloque)
+      : paso.fotos
       ? `<div class="foto-grilla">${paso.fotos.map((f) => renderFoto(bloque, f)).join('')}</div>`
       : (paso.campos || []).map((campo) => renderCampo(bloque, campo)).join('');
     return `
@@ -278,6 +283,32 @@ const Encuesta = (() => {
         ${ayuda}
         ${cuerpo}
       </div>`;
+  }
+
+  /* Observaciones: no es un campo, es una lista que el técnico arma según lo
+     que va encontrando (hurto, falla en el medidor, etc.), cada una con su
+     propio texto y sus propias fotos. Sin mínimo: la mayoría de los clientes
+     no van a tener ningún hallazgo, así que 0 observaciones no bloquea la
+     toma de datos. Reusa el mismo mecanismo de "grupo de fotos" que ya existe
+     para mediciones/extra, con un id armado por observación. */
+  function renderObservaciones(bloque) {
+    const lista = ((datos[bloque.id] || {}).lista) || [];
+    const filas = lista.map((obs, i) => {
+      const clave = `${bloque.id}/obs_${obs.id}`;
+      const texto = (obs.texto || '').replace(/</g, '&lt;');
+      return `
+        <div class="observacion">
+          <div class="observacion-cab">
+            <span class="observacion-num">Observación ${i + 1}</span>
+            <button type="button" class="mini peligro" data-quitar-observacion="${obs.id}">Borrar</button>
+          </div>
+          <textarea rows="3" placeholder="¿Qué encontraste?" data-obs-texto="${obs.id}">${texto}</textarea>
+          <div class="foto-grilla">${renderFotoMultiple({ label: `Observación ${i + 1}` }, clave)}</div>
+        </div>`;
+    }).join('');
+    return `
+      <div class="observaciones-lista">${filas}</div>
+      <button type="button" class="btn-secondary" id="btn-agregar-observacion" style="width:100%">＋ Agregar observación</button>`;
   }
 
   function contarBloque(bloque) {
@@ -505,6 +536,45 @@ const Encuesta = (() => {
         render();
       });
     });
+
+    const btnAgregarObs = $('#btn-agregar-observacion');
+    if (btnAgregarObs) btnAgregarObs.addEventListener('click', () => {
+      const bloque = esquema.bloques[indice];
+      datos[bloque.id] = datos[bloque.id] || {};
+      datos[bloque.id].lista = (datos[bloque.id].lista || []).concat({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        texto: '',
+      });
+      guardar();
+      render();
+    });
+
+    $('#encuesta-cuerpo').querySelectorAll('[data-obs-texto]').forEach((el) => {
+      el.addEventListener('input', () => {
+        const bloque = esquema.bloques[indice];
+        const lista = (datos[bloque.id] || {}).lista || [];
+        const obs = lista.find((o) => o.id === el.dataset.obsTexto);
+        if (obs) obs.texto = el.value;
+        guardar();
+      });
+    });
+
+    $('#encuesta-cuerpo').querySelectorAll('[data-quitar-observacion]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const bloque = esquema.bloques[indice];
+        const obsId = el.dataset.quitarObservacion;
+        const clave = `${bloque.id}/obs_${obsId}`;
+        // Se van también las fotos que tuviera esa observación: no tiene
+        // sentido dejarlas huérfanas, sin ninguna observación que las explique.
+        for (const subId of (fotos[clave] || [])) {
+          await MapDB.deleteFoto(`${MapDB.fotoKey(cliente.sed, bloque.id, `obs_${obsId}`)}/${subId}`);
+        }
+        delete fotos[clave];
+        datos[bloque.id].lista = (datos[bloque.id].lista || []).filter((o) => o.id !== obsId);
+        await guardar();
+        render();
+      });
+    });
   }
 
   /* Sello de fecha/hora/coordenadas quemado en la foto, pedido por el
@@ -596,6 +666,22 @@ const Encuesta = (() => {
       if (!fotos[clave]) continue;
       const blob = await MapDB.getFoto(MapDB.fotoKey(cliente.sed, bloque.id, f.id));
       if (blob) mostrarFoto(clave, blob);
+    }
+  }
+
+  /* Las fotos de cada observación no salen de un esquema fijo (la lista de
+     observaciones la arma el técnico), así que se pintan aparte en vez de
+     por pintarFotosGuardadas(), que recorre paso.fotos. */
+  async function pintarFotosObservaciones(bloque) {
+    const lista = ((datos[bloque.id] || {}).lista) || [];
+    for (const obs of lista) {
+      const idFoto = `obs_${obs.id}`;
+      const clave = `${bloque.id}/${idFoto}`;
+      const subIds = Array.isArray(fotos[clave]) ? fotos[clave] : [];
+      for (const subId of subIds) {
+        const blob = await MapDB.getFoto(`${MapDB.fotoKey(cliente.sed, bloque.id, idFoto)}/${subId}`);
+        if (blob) mostrarFotoMulti(`${clave}/${subId}`, blob);
+      }
     }
   }
 

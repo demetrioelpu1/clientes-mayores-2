@@ -19,7 +19,10 @@
     "nombre_cliente: no se pide al tecnico; se rellena solo desde el GIS (opcional)",
     "fotos: 15 en total (6 trafomix + 6 medidor + 3 transformador). La 7ma del medidor, numerada en el formato pero sin etiqueta, la mando sacar el ingeniero el 14/08/2026",
     "clase_precision: texto libre; se normaliza al exportar (0.5 y 0,5 -> mismo valor)",
-    "trafomix: siempre existe, es lo que baja la tension para poder lecturar con el medidor"
+    "trafomix: siempre existe, es lo que baja la tension para poder lecturar con el medidor",
+    "fotos 'mediciones' (trafomix/medidor/transformador): pasaron a grupos de minimo 6, sin tope. 'extra' es un grupo mas, sin minimo. Decision del usuario 17/08/2026",
+    "observaciones: paso a una lista de observaciones (texto + fotos, sin minimo), en vez de un solo campo de texto libre. Opcional: 0 observaciones no bloquea 'completa'. En el Excel siguen juntas en la unica columna OBSERVACION, numeradas como texto. Decision del usuario 17/08/2026",
+    "mediciones_mt y mediciones_carga_fija: bloques nuevos, pedido del ingeniero via el usuario (17/08/2026). No estaban en las 48 columnas originales del Excel de Ananea; se agregaron 6 columnas nuevas AL FINAL (despues de OBSERVACION), decision explicita del usuario de tocar el formato ya acordado. Los 6 campos son obligatorios para 'completa', igual que las demas mediciones numericas."
   ],
   "_dudas": [
     "estado_cajatoma: texto libre o desplegable (el usuario va a preguntar)"
@@ -305,7 +308,37 @@
       {
         "grupo": "",
         "header": "OBSERVACIÓN",
-        "campo": "observaciones.observacion"
+        "origen": "observaciones"
+      },
+      {
+        "grupo": "MEDICIONES EN MT",
+        "header": "CORRIENTE FASE A",
+        "campo": "mediciones_mt.corriente_fase_a"
+      },
+      {
+        "grupo": "MEDICIONES EN MT",
+        "header": "CORRIENTE FASE B",
+        "campo": "mediciones_mt.corriente_fase_b"
+      },
+      {
+        "grupo": "MEDICIONES EN MT",
+        "header": "CORRIENTE FASE C",
+        "campo": "mediciones_mt.corriente_fase_c"
+      },
+      {
+        "grupo": "MEDICIONES CON CARGA FIJA",
+        "header": "POTENCIA EN VACÍO EN MEDIDOR",
+        "campo": "mediciones_carga_fija.potencia_vacio_medidor"
+      },
+      {
+        "grupo": "MEDICIONES CON CARGA FIJA",
+        "header": "POTENCIA CON CARGA FIJA EN MEDIDOR",
+        "campo": "mediciones_carga_fija.potencia_carga_fija_medidor"
+      },
+      {
+        "grupo": "MEDICIONES CON CARGA FIJA",
+        "header": "POTENCIA INYECTADA EN LA CARGA",
+        "campo": "mediciones_carga_fija.potencia_inyectada_carga"
       }
     ]
   },
@@ -803,20 +836,95 @@
       ]
     },
     {
+      "id": "mediciones_mt",
+      "titulo": "MEDICIONES EN MT",
+      "pasos": [
+        {
+          "id": "mediciones_mt_corrientes",
+          "titulo": "Corrientes en MT",
+          "ayuda": "Medidas con pinza amperimétrica en cada fase.",
+          "campos": [
+            {
+              "id": "corriente_fase_a",
+              "label": "Corriente fase A (A)",
+              "tipo": "decimal"
+            },
+            {
+              "id": "corriente_fase_b",
+              "label": "Corriente fase B (A)",
+              "tipo": "decimal"
+            },
+            {
+              "id": "corriente_fase_c",
+              "label": "Corriente fase C (A)",
+              "tipo": "decimal"
+            }
+          ]
+        },
+        {
+          "id": "mediciones_mt_fotos",
+          "titulo": "Fotos de mediciones en MT",
+          "fotos": [
+            {
+              "n": 1,
+              "id": "mediciones",
+              "label": "Mediciones",
+              "multiple": true,
+              "minimo": 6
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mediciones_carga_fija",
+      "titulo": "MEDICIONES CON CARGA FIJA",
+      "pasos": [
+        {
+          "id": "mediciones_carga_fija_potencias",
+          "titulo": "Potencias con carga fija",
+          "campos": [
+            {
+              "id": "potencia_vacio_medidor",
+              "label": "Potencia en vacío en medidor",
+              "tipo": "decimal"
+            },
+            {
+              "id": "potencia_carga_fija_medidor",
+              "label": "Potencia con carga fija en medidor",
+              "tipo": "decimal"
+            },
+            {
+              "id": "potencia_inyectada_carga",
+              "label": "Potencia inyectada en la carga",
+              "tipo": "decimal"
+            }
+          ]
+        },
+        {
+          "id": "mediciones_carga_fija_fotos",
+          "titulo": "Fotos de mediciones con carga fija",
+          "fotos": [
+            {
+              "n": 1,
+              "id": "mediciones",
+              "label": "Mediciones",
+              "multiple": true,
+              "minimo": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "observaciones",
       "titulo": "OBSERVACIONES",
       "pasos": [
         {
           "id": "observaciones_final",
           "titulo": "Observaciones",
-          "ayuda": "Cualquier cosa fuera de lo normal: acceso, estado, cliente ausente, etc.",
-          "campos": [
-            {
-              "id": "observacion",
-              "label": "Observaciones",
-              "tipo": "texto_largo"
-            }
-          ]
+          "ayuda": "Cualquier cosa fuera de lo normal: hurto, falla en el medidor, acceso, cliente ausente, etc. Opcional: si no hay nada que reportar, no hace falta agregar ninguna.",
+          "observaciones": true
         }
       ]
     }
