@@ -786,12 +786,20 @@ const Encuesta = (() => {
     };
   }
 
+  /* Sube este cliente al panel si hay señal. En silencio, sin avisar nada:
+     lo dispara cada guardado (ver sync.js). Si no hay señal, sync.js no hace
+     nada y se retoma solo en la próxima conexión. */
+  function dispararSync() {
+    if (window.Sync && cliente) Sync.sincronizarUna(cliente.sed);
+  }
+
   /* Se llama en cada tecla: se agrupa para no escribir en disco 40 veces por segundo. */
   function guardar() {
     clearTimeout(guardadoPendiente);
     return new Promise((resolve) => {
       guardadoPendiente = setTimeout(async () => {
         await MapDB.putEncuesta(registro());
+        dispararSync();
         resolve();
       }, 400);
     });
@@ -803,11 +811,13 @@ const Encuesta = (() => {
   async function guardarYa() {
     clearTimeout(guardadoPendiente);
     await MapDB.putEncuesta(registro());
+    dispararSync();
   }
 
   async function cerrar() {
     clearTimeout(guardadoPendiente);
     await MapDB.putEncuesta(registro());
+    dispararSync();
     AppBridge.closeSheet('#overlay-encuesta');
     await Campana.refrescarEstados();
   }

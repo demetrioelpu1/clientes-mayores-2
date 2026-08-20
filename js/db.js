@@ -1,7 +1,7 @@
 /* db.js — capa de acceso a IndexedDB para tiles de mapa y recortes (packs) offline */
 
 const DB_NAME = 'catastro-map-db';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const STORE_TILES = 'tiles';
 const STORE_PACKS = 'packs';
 const STORE_NETWORK = 'network_features'; // postes, tramos, subestaciones cargados desde KMZ/KML
@@ -9,6 +9,8 @@ const STORE_ENCUESTAS = 'encuestas';      // una por cliente mayor (Fase 3)
 const STORE_FOTOS = 'fotos';              // Blobs aparte: listar encuestas no debe arrastrar MB
 const STORE_PAQUETES = 'paquetes';        // KMZ cargados por alimentador, versionados (Fase 2)
 const STORE_RUTA = 'ruta';                // migas numeradas que el técnico deja al recorrer
+const STORE_SYNC_ENCUESTAS = 'sync_encuestas'; // qué "actualizado" de cada encuesta ya llegó al panel
+const STORE_SYNC_FOTOS = 'sync_fotos';         // qué claves de foto ya llegaron al panel
 
 let _dbPromise = null;
 
@@ -54,6 +56,16 @@ function openDB() {
         // nuevo lleva el número siguiente, no repite el viejo.
         const store = db.createObjectStore(STORE_RUTA, { keyPath: 'id' });
         store.createIndex('zona', 'zona');
+      }
+      if (!db.objectStoreNames.contains(STORE_SYNC_ENCUESTAS)) {
+        // Solo bookkeeping de qué ya llegó al panel: nunca datos de negocio.
+        // key: sed, value: { sed, actualizado } — el "actualizado" con el
+        // que se subió por última vez con éxito.
+        db.createObjectStore(STORE_SYNC_ENCUESTAS);
+      }
+      if (!db.objectStoreNames.contains(STORE_SYNC_FOTOS)) {
+        // key: la misma clave que STORE_FOTOS, value: true
+        db.createObjectStore(STORE_SYNC_FOTOS);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -369,6 +381,47 @@ async function deleteFotosDe(sed) {
   for (const k of keys) await deleteFoto(k);
 }
 
+/* ---- bookkeeping de sincronización con el panel (sync.js) ----
+   Solo guardan "qué ya se subió", nunca datos de negocio: le alcanza a
+   sync.js para saber qué falta subir sin tener que preguntarle al servidor
+   en cada pasada. */
+
+async function getSyncEncuesta(sed) {
+  const store = await tx(STORE_SYNC_ENCUESTAS, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(sed);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function putSyncEncuesta(sed, actualizado) {
+  const store = await tx(STORE_SYNC_ENCUESTAS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put({ sed, actualizado }, sed);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function fotoSincronizada(key) {
+  const store = await tx(STORE_SYNC_FOTOS, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(key);
+    req.onsuccess = () => resolve(Boolean(req.result));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function marcarFotoSincronizada(key) {
+  const store = await tx(STORE_SYNC_FOTOS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(true, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 /* ---- paquetes de datos del GIS cargados desde KMZ (Fase 2) ---- */
 
 function zonaKey(setSlug, alimentador) {
@@ -501,6 +554,10 @@ window.MapDB = {
   getFoto,
   deleteFoto,
   listarFotoKeys,
+  getSyncEncuesta,
+  putSyncEncuesta,
+  fotoSincronizada,
+  marcarFotoSincronizada,
   zonaKey,
   putPaquete,
   getPaquetesDeZona,

@@ -2,7 +2,7 @@
    Los tiles del mapa NO se cachean aquí: eso lo maneja IndexedDB desde app.js/db.js,
    para poder gestionarlos como "recortes" independientes con nombre, borrado, etc. */
 
-const CACHE_NAME = 'catastro-app-shell-v36';
+const CACHE_NAME = 'catastro-app-shell-v37';
 const APP_SHELL = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const APP_SHELL = [
   './css/images/marker-shadow.png',
   './js/app.js',
   './js/db.js',
+  './js/sync.js',
   './js/offline-tilelayer.js',
   './js/kmz.js',
   './js/campana.js',
