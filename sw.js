@@ -2,7 +2,7 @@
    Los tiles del mapa NO se cachean aquí: eso lo maneja IndexedDB desde app.js/db.js,
    para poder gestionarlos como "recortes" independientes con nombre, borrado, etc. */
 
-const CACHE_NAME = 'catastro-app-shell-v37';
+const CACHE_NAME = 'catastro-app-shell-v38';
 const APP_SHELL = [
   './',
   './index.html',
@@ -22,13 +22,17 @@ const APP_SHELL = [
   './js/kmz.js',
   './js/campana.js',
   './js/ruta.js',
+  './js/fotoVisor.js',
   './js/encuesta.js',
+  './js/encuestaAp.js',
   './js/xlsx.js',
   './js/resultados.js',
   // El catálogo es chico y hace falta siempre; los set-*.json se cachean solos
   // la primera vez que se abre esa SET (el fetch de abajo es cache-first).
   './data/catalogo.json',
   './data/encuesta.json',
+  './data/encuesta-ap.json',
+  './data/ap-referencia.json',
   './data/alias.json',
   './js/vendor/leaflet.js',
   './js/vendor/fflate.js',

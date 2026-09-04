@@ -8,8 +8,8 @@
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="stylesheet" href="css/leaflet.css?v=37" />
-<link rel="stylesheet" href="css/app.css?v=37" />
+<link rel="stylesheet" href="css/leaflet.css?v=38" />
+<link rel="stylesheet" href="css/app.css?v=38" />
 </head>
 <body>
 <div id="app">
@@ -254,6 +254,23 @@
     </div>
   </div>
 
+  <!-- ===== Toma de datos de Alumbrado Público (AP) — modo aparte, por SED ===== -->
+  <div class="sheet-overlay" id="overlay-encuesta-ap">
+    <div class="sheet sheet-alta">
+      <button class="sheet-agarre" id="ap-agarre" aria-label="Minimizar o maximizar"></button>
+      <h2>
+        <span class="h2-izq">
+          <button class="sheet-atras" id="ap-atras-cab" aria-label="Atrás">&#8592;</button>
+          <span id="ap-titulo">AP</span>
+        </span>
+        <span class="close" id="ap-cerrar">✕</span>
+      </h2>
+      <div class="cliente-sub" id="ap-sub"></div>
+      <div id="ap-cuerpo"></div>
+      <div class="paso-progreso" id="ap-progreso"></div>
+    </div>
+  </div>
+
   <!-- ===== Panel: resultados y descarga (Fase 4) ===== -->
   <div class="sheet-overlay" id="overlay-resultados">
     <div class="sheet sheet-alta">
@@ -302,16 +319,18 @@
 </script>
 <script src="js/vendor/leaflet.js"></script>
 <script src="js/vendor/fflate.js"></script>
-<script src="js/db.js?v=37"></script>
-<script src="js/sync.js?v=37"></script>
-<script src="js/offline-tilelayer.js?v=37"></script>
-<script src="js/kmz.js?v=37"></script>
-<script src="js/ruta.js?v=37"></script>
-<script src="js/app.js?v=37"></script>
-<script src="js/campana.js?v=37"></script>
-<script src="js/encuesta.js?v=37"></script>
-<script src="js/xlsx.js?v=37"></script>
-<script src="js/resultados.js?v=37"></script>
+<script src="js/db.js?v=38"></script>
+<script src="js/sync.js?v=38"></script>
+<script src="js/offline-tilelayer.js?v=38"></script>
+<script src="js/kmz.js?v=38"></script>
+<script src="js/ruta.js?v=38"></script>
+<script src="js/app.js?v=38"></script>
+<script src="js/campana.js?v=38"></script>
+<script src="js/fotoVisor.js?v=38"></script>
+<script src="js/encuesta.js?v=38"></script>
+<script src="js/encuestaAp.js?v=38"></script>
+<script src="js/xlsx.js?v=38"></script>
+<script src="js/resultados.js?v=38"></script>
 <script>Campana.iniciar();</script>
 </body>
 </html>

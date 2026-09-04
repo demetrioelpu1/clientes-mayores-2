@@ -1,0 +1,151 @@
+{
+  "_meta": {
+    "version": "0.1",
+    "fecha": "2026-09-04",
+    "nombre_visible": "Toma de datos AP",
+    "regla": "1 toma de datos = 1 SED del sistema (no un cliente mayor) — mide el equipo de Alumbrado Público (AP) del SED, si tiene. Formulario aparte del de clientes mayores, mismo mecanismo de renderizado.",
+    "sobre_tiene_ap": "Algunos SED no tienen AP. El técnico lo verifica en el paso 'tiene_ap' — si marca 'No', el formulario salta directo a preguntar qué otro equipo de medición encontró (medidor, transformador de corriente, etc.) en vez de marca/modelo/serie/relación de transformación."
+  },
+  "automaticos": [
+    { "id": "responsable", "label": "Responsable", "origen": "tecnico" },
+    { "id": "latitud", "label": "Latitud", "origen": "gps" },
+    { "id": "longitud", "label": "Longitud", "origen": "gps" },
+    { "id": "precision_gps", "label": "Precisión GPS (m)", "origen": "gps" },
+    { "id": "alimentador", "label": "Alimentador", "origen": "gis" },
+    { "id": "sistema_electrico", "label": "Sistema eléctrico", "origen": "gis" },
+    { "id": "fecha_inspeccion", "label": "Fecha de inspección", "origen": "auto" }
+  ],
+  "bloques": [
+    {
+      "id": "ap",
+      "titulo": "ALUMBRADO PÚBLICO",
+      "pasos": [
+        {
+          "id": "ap_tiene",
+          "titulo": "¿Tiene AP este SED?",
+          "campos": [
+            {
+              "id": "tiene_ap",
+              "label": "¿Tiene AP?",
+              "tipo": "lista",
+              "opciones": ["Sí", "No"],
+              "requerido": true
+            }
+          ]
+        },
+        {
+          "id": "ap_identificacion",
+          "titulo": "Identificación del AP",
+          "ayuda": "Se leen de la placa del equipo. Si el SED ya tenía datos registrados, corroboralos — si está mal alguno, corregilo; si no, dejalo tal cual.",
+          "condicion": { "campo": "tiene_ap", "igual": "Sí" },
+          "campos": [
+            { "id": "marca", "label": "Marca", "tipo": "texto", "sugerencias": true },
+            { "id": "serie", "label": "Serie", "tipo": "texto" },
+            { "id": "relacion_transformacion", "label": "Relación de transformación", "tipo": "texto", "placeholder": "300/5" },
+            {
+              "id": "anio",
+              "label": "Año",
+              "tipo": "lista",
+              "opciones": [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009, 2008, 2007, 2006, 2005, 2004, 2003, 2002, 2001, 2000, 1999, 1998, 1997, 1996, 1995, 1994, 1993, 1992, 1991, 1990]
+            }
+          ]
+        },
+        {
+          "id": "ap_lectura",
+          "titulo": "Lectura",
+          "ayuda": "Lectura actual del medidor de AP.",
+          "condicion": { "campo": "tiene_ap", "igual": "Sí" },
+          "campos": [
+            {
+              "id": "estado_lectura", "label": "¿Se pudo leer?", "tipo": "lista",
+              "opciones": ["Lectura correcta", "Lectura ilegible", "Otros"], "requerido": true
+            },
+            {
+              "id": "lectura", "label": "Lectura actual", "tipo": "decimal", "requerido": true,
+              "condicion": { "campo": "estado_lectura", "igual": "Lectura correcta" }
+            },
+            {
+              "id": "motivo_ilegible", "label": "Motivo (no se pudo leer)", "tipo": "texto_largo", "requerido": true,
+              "condicion": { "campo": "estado_lectura", "igual": "Lectura ilegible" }
+            },
+            {
+              "id": "detalle_otros", "label": "Detalle", "tipo": "texto_largo", "requerido": true,
+              "condicion": { "campo": "estado_lectura", "igual": "Otros" }
+            },
+            { "id": "fecha_lectura", "label": "Fecha de esta lectura", "tipo": "fecha", "requerido": true }
+          ]
+        },
+        {
+          "id": "ap_sin_ap",
+          "titulo": "Qué mediste",
+          "ayuda": "Este SED no tiene AP — igual registrá la lectura de lo que sí haya (medidor, transformador de corriente, etc.).",
+          "condicion": { "campo": "tiene_ap", "igual": "No" },
+          "campos": [
+            {
+              "id": "tipo_medicion",
+              "label": "Qué mediste",
+              "tipo": "lista",
+              "opciones": ["Medidor", "Transformador de corriente", "Otro"],
+              "requerido": true
+            },
+            {
+              "id": "estado_lectura", "label": "¿Se pudo leer?", "tipo": "lista",
+              "opciones": ["Lectura correcta", "Lectura ilegible", "Otros"], "requerido": true
+            },
+            {
+              "id": "lectura", "label": "Lectura", "tipo": "decimal", "requerido": true,
+              "condicion": { "campo": "estado_lectura", "igual": "Lectura correcta" }
+            },
+            {
+              "id": "motivo_ilegible", "label": "Motivo (no se pudo leer)", "tipo": "texto_largo", "requerido": true,
+              "condicion": { "campo": "estado_lectura", "igual": "Lectura ilegible" }
+            },
+            {
+              "id": "detalle_otros", "label": "Detalle", "tipo": "texto_largo", "requerido": true,
+              "condicion": { "campo": "estado_lectura", "igual": "Otros" }
+            },
+            { "id": "fecha_lectura", "label": "Fecha de esta lectura", "tipo": "fecha", "requerido": true }
+          ]
+        },
+        {
+          "id": "ap_fotos",
+          "titulo": "Fotos",
+          "fotos": [
+            { "n": 1, "id": "fotos", "label": "Fotos del AP", "multiple": true, "minimo": 3 }
+          ]
+        },
+        {
+          "id": "ap_observaciones",
+          "titulo": "Observaciones",
+          "ayuda": "Cualquier cosa fuera de lo normal. Opcional.",
+          "observaciones": true
+        }
+      ]
+    }
+  ],
+  "exportacion": {
+    "hoja": "AP",
+    "_nota": "Export aparte del de clientes mayores — no comparte las 54 columnas de ese formato.",
+    "columnas": [
+      { "grupo": "", "header": "ITEM", "origen": "item" },
+      { "grupo": "", "header": "ALIMENTADOR", "origen": "gis.alimentador" },
+      { "grupo": "", "header": "SED", "origen": "gis.etiqueta" },
+      { "grupo": "", "header": "TIENE AP", "campo": "ap.tiene_ap" },
+      { "grupo": "", "header": "MARCA", "campo": "ap.marca" },
+      { "grupo": "", "header": "SERIE", "campo": "ap.serie" },
+      { "grupo": "", "header": "RELACIÓN DE TRANSFORMACIÓN", "campo": "ap.relacion_transformacion" },
+      { "grupo": "", "header": "AÑO", "campo": "ap.anio" },
+      { "grupo": "", "header": "QUÉ MEDISTE (SI NO TIENE AP)", "campo": "ap.tipo_medicion" },
+      { "grupo": "", "header": "¿SE PUDO LEER?", "campo": "ap.estado_lectura" },
+      { "grupo": "", "header": "LECTURA", "campo": "ap.lectura" },
+      { "grupo": "", "header": "MOTIVO (NO SE PUDO LEER)", "campo": "ap.motivo_ilegible" },
+      { "grupo": "", "header": "DETALLE (OTROS)", "campo": "ap.detalle_otros" },
+      { "grupo": "", "header": "FECHA DE LECTURA", "campo": "ap.fecha_lectura" },
+      { "grupo": "", "header": "LECTURA ANTERIOR (REFERENCIA)", "origen": "lectura_referencia" },
+      { "grupo": "", "header": "FECHA LECTURA ANTERIOR", "origen": "lectura_referencia_mes" },
+      { "grupo": "", "header": "OBSERVACIÓN", "origen": "observaciones" },
+      { "grupo": "", "header": "TÉCNICO", "campo": "responsable" },
+      { "grupo": "", "header": "FECHA", "campo": "fecha_inspeccion" }
+    ]
+  }
+}

@@ -487,7 +487,9 @@ const Encuesta = (() => {
         const [bloque, idFoto] = clave.split('/');
         try {
           const blob = await comprimir(archivo);
-          await MapDB.putFoto(MapDB.fotoKey(cliente.sed, bloque, idFoto), blob);
+          const key = MapDB.fotoKey(cliente.sed, bloque, idFoto);
+          await MapDB.putFoto(key, blob);
+          await guardarGpsDeFoto(key);
           fotos[clave] = true;
           await guardar();
           mostrarFoto(clave, blob);
@@ -512,7 +514,9 @@ const Encuesta = (() => {
         try {
           const blob = await comprimir(archivo);
           const subId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-          await MapDB.putFoto(`${MapDB.fotoKey(cliente.sed, bloque, idFoto)}/${subId}`, blob);
+          const key = `${MapDB.fotoKey(cliente.sed, bloque, idFoto)}/${subId}`;
+          await MapDB.putFoto(key, blob);
+          await guardarGpsDeFoto(key);
           fotos[clave] = (Array.isArray(fotos[clave]) ? fotos[clave] : []).concat(subId);
           await guardar();
           render();   // el grid entero corre un lugar: no alcanza con pintar una casilla
@@ -534,6 +538,29 @@ const Encuesta = (() => {
         fotos[clave] = (fotos[clave] || []).filter((x) => x !== subId);
         await guardar();
         render();
+      });
+    });
+
+    /* Tocar una miniatura ya sacada la abre a pantalla completa (antes no
+       hacía nada). La cruz de borrar sigue funcionando igual: su propio
+       listener hace stopPropagation, así que nunca llega hasta acá. */
+    $('#encuesta-cuerpo').querySelectorAll('[data-vista-multi]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const partes = el.dataset.vistaMulti.split('/');
+        const subId = partes.pop();
+        const clave = partes.join('/');
+        const [bloque, idFoto] = clave.split('/');
+        const key = `${MapDB.fotoKey(cliente.sed, bloque, idFoto)}/${subId}`;
+        const blob = await MapDB.getFoto(key);
+        if (!blob) return;
+        const resultado = await FotoVisor.abrir(blob, { permiteRepetir: true });
+        if (resultado === 'borrar' || resultado === 'repetir') {
+          await MapDB.deleteFoto(key);
+          fotos[clave] = (fotos[clave] || []).filter((x) => x !== subId);
+          await guardar();
+          render();
+          if (resultado === 'repetir') $(`[data-input-foto-multi="${clave}"]`)?.click();
+        }
       });
     });
 
@@ -611,6 +638,17 @@ const Encuesta = (() => {
       const y = lienzo.height - pad - (lineas.length - 1 - i) * lineHeight;
       ctx.fillText(linea, pad, y);
     });
+  }
+
+  /* Mismo GPS que timbrarFoto() quema en los píxeles, pero también como dato
+     aparte — sirve para mapear las fotos sin depender de leer el sello con
+     OCR. No es un cambio de comportamiento visible: la franja quemada sigue
+     igual, esto solo agrega el dato estructurado al lado. */
+  async function guardarGpsDeFoto(key) {
+    const pos = window.AppBridge && AppBridge.getGpsActual && AppBridge.getGpsActual();
+    if (!pos) return;
+    const { latitude, longitude, accuracy } = pos.coords;
+    await MapDB.putFotoGps(key, { lat: latitude, lon: longitude, precision: Math.round(accuracy) });
   }
 
   /* Redimensiona, recomprime y timbra en el propio celular antes de guardar. */

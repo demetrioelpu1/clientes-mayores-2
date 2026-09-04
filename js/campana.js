@@ -16,6 +16,14 @@ const Campana = (() => {
   const CLAVE_SET = 'catastro:campana:set';
   const CLAVE_ALIM = 'catastro:campana:alimentador';
   const CLAVE_TECNICO = 'catastro:tecnico';
+  const CLAVE_MODO_AP = 'catastro:campana:modo-ap';
+
+  /* Modo de trabajo dentro de un alimentador: clientes mayores (lo de
+     siempre) o Alumbrado Público (por SED, ver encuestaAp.js). No cambia
+     qué se dibuja en el mapa —el SED ya se veía como triángulo antes— solo
+     qué hace abrirFichaSed() al tocarlo: antes era de solo lectura, en modo
+     AP abre la toma de datos. */
+  let modoAP = localStorage.getItem(CLAVE_MODO_AP) === '1';
 
   const CAPAS = ['tramos_mt', 'trafomix', 'sed', 'alimentador'];
   const NOMBRE_CAPA = {
@@ -180,6 +188,22 @@ const Campana = (() => {
     return fc.features.filter((f) => !alimentador || f.properties.alimentador === alimentador);
   }
 
+  /* data/ap-referencia.json: por Etiqueta de Campo, lo que ya se sabe del AP
+     de ese SED (ver tools/build_ap_data.py). Se carga una sola vez y sirve
+     para sugerir códigos ya conocidos en el buscador del modo AP — el
+     precargado real de campos lo hace encuestaAp.js por su cuenta. */
+  let referenciaAp = null;
+  async function cargarReferenciaAp() {
+    if (referenciaAp) return referenciaAp;
+    try {
+      const res = await fetch(rutaData('ap-referencia.json'));
+      referenciaAp = res.ok ? await res.json() : {};
+    } catch {
+      referenciaAp = {};
+    }
+    return referenciaAp;
+  }
+
   function coordsDe(feature) {
     const g = feature.geometry;
     if (!g) return null;
@@ -227,6 +251,54 @@ const Campana = (() => {
         .map((c) => Object.assign({ tipo: 'sed', gis: null }, c));
     }
     return [];
+  }
+
+  /* La capa SED que carga la app viene recortada a clientes mayores
+     (Propietario = Tercero) — un SED de Alumbrado Público, que es de la red
+     general, no está dibujado ahí. Para no depender de tocar el mapa,
+     busca el código en tres lugares, de más a menos directo:
+     1) la propia capa SED (por si algún día llega sin el recorte);
+     2) como referencia dentro de un trafomix (`sed_etiqueta`: "de qué SED
+        cuelga este cliente") — mismo punto físico, sirve de coordenada;
+     3) si no aparece en ningún lado, igual deja abrir el formulario sin
+        coordenadas — el técnico carga los datos con su propio GPS. */
+  function buscarSedPorCodigo(codigo) {
+    const buscado = String(codigo || '').trim().toUpperCase();
+    if (!buscado) return null;
+
+    const enSed = (capas.sed || []).find((f) => {
+      const p = f.properties;
+      return String(p.etiqueta || p.sed || '').toUpperCase() === buscado;
+    });
+    if (enSed) {
+      const c = coordsDe(enSed) || {};
+      const p = enSed.properties;
+      return {
+        sed: p.etiqueta || p.sed, etiqueta: p.etiqueta || p.sed || '', nombre: p.nombre || '',
+        alimentador: p.alimentador || alimentador, setSlug: setActual.slug, sistema: setActual.sistema || '',
+        lat: c.lat, lon: c.lon,
+      };
+    }
+
+    const viaTrafomix = (capas.trafomix || []).find((f) =>
+      String(f.properties.sed_etiqueta || '').toUpperCase() === buscado);
+    if (viaTrafomix) {
+      const c = coordsDe(viaTrafomix) || {};
+      const p = viaTrafomix.properties;
+      return {
+        sed: buscado, etiqueta: buscado, nombre: p.nombre || '',
+        alimentador: p.alimentador || alimentador, setSlug: setActual.slug, sistema: setActual.sistema || '',
+        lat: c.lat, lon: c.lon,
+      };
+    }
+
+    // No apareció en ningún lado: se abre igual, sin coordenadas del GIS
+    // (Ruta.guardarPuntoDirecto no hace nada si no hay lat/lon — el
+    // técnico igual puede cargar los datos, solo no se marca en el mapa).
+    return {
+      sed: buscado, etiqueta: buscado, nombre: '', alimentador: alimentador || '',
+      setSlug: setActual.slug, sistema: setActual.sistema || '', lat: null, lon: null,
+    };
   }
 
   /* ------------------------------------------------- estado de cada toma de datos */
@@ -400,6 +472,17 @@ const Campana = (() => {
     $('#campana-cuerpo').innerHTML = barraTecnico() + cuerpo;
     $('#campana-atras').hidden = pila.length === 0;
     conectarTecnico();
+  }
+
+  /* ---------------------------------------------------------- modo AP */
+
+  function getModoAP() { return modoAP; }
+
+  function alternarModoAP() {
+    modoAP = !modoAP;
+    localStorage.setItem(CLAVE_MODO_AP, modoAP ? '1' : '0');
+    AppBridge.showToast(modoAP ? 'Modo Alumbrado Público — tocá un SED (△) en el mapa' : 'Modo Clientes mayores', 3500);
+    if (vistaActual === renderClientes) renderClientes();
   }
 
   /* ------------------------------------------------------------- técnico */
@@ -658,10 +741,56 @@ const Campana = (() => {
         + `📍 Ir al inicio del alimentador ${alimentador}</button>`
       : '';
 
-    pintar(`Clientes mayores (${hechos}/${total})`, migas, `
+    const tituloLista = modoAP ? 'Alumbrado Público' : `Clientes mayores (${hechos}/${total})`;
+    // El SED ya se dibuja en el mapa (triángulo magenta) en los dos modos —
+    // esto solo cambia qué hace tocarlo. La capa SED que carga la app viene
+    // recortada a clientes mayores (Propietario = Tercero): un SED de AP no
+    // está ahí, así que además de tocar el mapa se puede buscar por código
+    // directamente (ver buscarSedPorCodigo).
+    const botonModo = `<button class="btn-secondary" id="btn-modo-ap" style="width:100%;margin-bottom:10px;">
+        ${modoAP ? '👥 Cambiar a Clientes mayores' : '💡 Cambiar a Alumbrado Público (por SED)'}
+      </button>`;
+
+    let buscadorAp = '';
+    if (modoAP) {
+      const ref = await cargarReferenciaAp();
+      const sugeridos = Object.keys(ref).filter((et) => ref[et].alimentador === alimentador);
+      const todasAp = await MapDB.getAllAp();
+      const estadosAp = {};
+      todasAp.forEach((a) => { estadosAp[a.sed] = a.estado; });
+
+      const filasAp = sugeridos.map((et) => {
+        const info = ref[et];
+        const estado = estadosAp[et] || 'pendiente';
+        return `
+          <div class="campana-fila cliente" data-ap="${et}">
+            <div class="estado-punto ${estado}"></div>
+            <div class="campana-info">
+              <div class="campana-nombre">${et}</div>
+              <div class="campana-detalle">${info.marca || '—'} · lectura ref. ${info.lectura_referencia ?? '—'}</div>
+            </div>
+            <div class="campana-flecha">›</div>
+          </div>`;
+      }).join('');
+
+      buscadorAp = `
+        ${sugeridos.length
+          ? `<div class="grupo-titulo" style="margin:4px 0 6px">SED con AP conocido en este alimentador (${sugeridos.length})</div>${filasAp}`
+          : '<div class="campana-vacio">No hay SED con AP conocido en este alimentador todavía.</div>'}
+        <div class="campana-vacio" style="margin-top:10px">¿Otro SED, no está en la lista? También podés tocar un SED (△) en el mapa, o buscarlo por código:</div>
+        <div class="ap-buscar">
+          <input type="text" id="ap-buscar-codigo" placeholder="Código del SED (ej: SE08393)" autocapitalize="characters">
+          <button class="btn-secondary" id="ap-buscar-btn">Abrir</button>
+        </div>`;
+    }
+
+    pintar(tituloLista, migas, `
       <div class="capa-tira">${tira}</div>
+      ${botonModo}
+      ${buscadorAp}
       ${botonCarga}
       ${botonInicio}
+      ${modoAP ? '' : `
       <div class="nuevo-equipo">
         <div class="nuevo-texto">¿Encontraste un equipo que no está en el mapa?</div>
         <div class="nuevo-botones">
@@ -669,13 +798,34 @@ const Campana = (() => {
           <button class="mini" data-nuevo="sed">＋ SED</button>
         </div>
       </div>
-      ${filas || '<div class="campana-vacio">No hay clientes mayores cargados en este alimentador.</div>'}`);
+      ${filas || '<div class="campana-vacio">No hay clientes mayores cargados en este alimentador.</div>'}`}`);
     conectarMigas();
 
     $('#campana-cuerpo').querySelectorAll('[data-nuevo]').forEach((el) => {
       el.addEventListener('click', () => agregarEquipoNuevo(el.dataset.nuevo));
     });
 
+    $('#btn-modo-ap').addEventListener('click', () => alternarModoAP());
+    if (modoAP) {
+      const abrirBuscado = () => {
+        const input = $('#ap-buscar-codigo');
+        const c = buscarSedPorCodigo(input.value);
+        if (!c) return;
+        input.value = '';
+        AppBridge.closeSheet('#overlay-campana');
+        EncuestaAp.abrir(c);
+      };
+      $('#ap-buscar-btn').addEventListener('click', abrirBuscado);
+      $('#ap-buscar-codigo').addEventListener('keydown', (e) => { if (e.key === 'Enter') abrirBuscado(); });
+      $('#campana-cuerpo').querySelectorAll('[data-ap]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const c = buscarSedPorCodigo(el.dataset.ap);
+          if (!c) return;
+          AppBridge.closeSheet('#overlay-campana');
+          EncuestaAp.abrir(c);
+        });
+      });
+    }
     $('#btn-cargar-kmz').addEventListener('click', () => pedirArchivos(null));
     if (cabecera) $('#btn-ir-inicio').addEventListener('click', irAlInicio);
     $('#campana-cuerpo').querySelectorAll('[data-capa]').forEach((el) => {
@@ -907,8 +1057,9 @@ const Campana = (() => {
     map().setView(cabecera, 17);
   }
 
-  /* Ficha de una SED: es solo consulta, acá no se toma ningún dato — lo que se
-     inspecciona es el trafomix del cliente. */
+  /* Ficha de una SED. Normalmente es de solo consulta —lo que se inspecciona
+     es el trafomix del cliente—, pero en modo AP (ver alternarModoAP) es la
+     puerta de entrada a la toma de datos de Alumbrado Público de ese SED. */
   function abrirFichaSed(p, latlng) {
     $('#cliente-nombre').textContent = p.nombre || p.etiqueta || 'SED';
     $('#cliente-sub').textContent =
@@ -921,7 +1072,26 @@ const Campana = (() => {
       AppBridge.closeSheet('#overlay-campana');
       map().setView(latlng, 18);
     };
-    $('#cliente-encuesta-btn').hidden = true;
+
+    const btn = $('#cliente-encuesta-btn');
+    btn.hidden = !modoAP;
+    if (modoAP) {
+      btn.textContent = 'Toma de datos AP';
+      btn.onclick = () => {
+        AppBridge.closeSheet('#overlay-cliente');
+        AppBridge.closeSheet('#overlay-campana');
+        EncuestaAp.abrir({
+          sed: p.etiqueta || p.sed,
+          etiqueta: p.etiqueta || p.sed || '',
+          nombre: p.nombre || '',
+          alimentador: p.alimentador || alimentador || '',
+          setSlug: setActual.slug,
+          sistema: setActual.sistema || '',
+          lat: latlng.lat,
+          lon: latlng.lng,
+        });
+      };
+    }
 
     AppBridge.openSheet('#overlay-cliente');
   }
@@ -1077,7 +1247,7 @@ const Campana = (() => {
   return {
     iniciar, listo, abrirSelector, hayZonaActiva, hayZonaElegida, etiquetaActual,
     redibujar, getTecnico, refrescarEstados, atras, importarArchivos, getTramos,
-    irACliente,
+    irACliente, getModoAP, alternarModoAP,
   };
 })();
 

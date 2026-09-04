@@ -1,0 +1,236 @@
+{
+ "SE01268": {
+  "alimentador": "3002",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 93362.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212975"
+ },
+ "SE08392": {
+  "alimentador": "3001",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 246073.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212981"
+ },
+ "SE08393": {
+  "alimentador": "3001",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 392256.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212978"
+ },
+ "SE08409": {
+  "alimentador": "3002",
+  "anio_fabricacion": 2019,
+  "lectura_referencia": 79437.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "SANXING",
+  "relacion_transformacion": "1",
+  "serie": "20197352"
+ },
+ "SE08411": {
+  "alimentador": "3002",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 44937.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212305"
+ },
+ "SE08970": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2019,
+  "lectura_referencia": 113762.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "SANXING",
+  "relacion_transformacion": "1",
+  "serie": "20191039"
+ },
+ "SE08973": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 179576.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018213033"
+ },
+ "SE08974": {
+  "alimentador": "3004",
+  "anio_fabricacion": 2019,
+  "lectura_referencia": 148493.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "SANXING",
+  "relacion_transformacion": "1",
+  "serie": "20194785"
+ },
+ "SE08975": {
+  "alimentador": "3004",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 161604.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018090631"
+ },
+ "SE09020": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 68126.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018213040"
+ },
+ "SE09029": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 53089.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212626"
+ },
+ "SE09042": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 83751.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212619"
+ },
+ "SE09055": {
+  "alimentador": "3004",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 56416.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018213037"
+ },
+ "SE09062": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 39022.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212976"
+ },
+ "SE09064": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 40160.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018213046"
+ },
+ "SE09065": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 99880.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018213043"
+ },
+ "SE09817": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2019,
+  "lectura_referencia": 72116.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "SANXING",
+  "relacion_transformacion": "1",
+  "serie": "20192039"
+ },
+ "SE09818": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2019,
+  "lectura_referencia": 54827.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "SANXING",
+  "relacion_transformacion": "1",
+  "serie": "20192037"
+ },
+ "SE09845": {
+  "alimentador": "3003",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 12316.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212973"
+ },
+ "SE09846": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 36777.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018213036"
+ },
+ "SE09849": {
+  "alimentador": "3003",
+  "anio_fabricacion": 2019,
+  "lectura_referencia": 2468.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "SANXING",
+  "relacion_transformacion": "1",
+  "serie": "20198410"
+ },
+ "SE09892": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2019,
+  "lectura_referencia": 53526.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "SANXING",
+  "relacion_transformacion": "1",
+  "serie": "20194097"
+ },
+ "SE09965": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 120082.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018090636"
+ },
+ "SE09972": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2009,
+  "lectura_referencia": 677809.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "ACTARIS",
+  "relacion_transformacion": "1",
+  "serie": "50014973"
+ },
+ "SE09974": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 127285.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018212618"
+ },
+ "SE10853": {
+  "alimentador": "3005",
+  "anio_fabricacion": 2018,
+  "lectura_referencia": 18533.0,
+  "lectura_referencia_mes": "2026-08",
+  "marca": "CLOU",
+  "relacion_transformacion": "1",
+  "serie": "2018090634"
+ }
+}

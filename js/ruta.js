@@ -18,7 +18,7 @@ const Ruta = (() => {
   'use strict';
 
   const COLOR = '#7cff6b';
-  const ORDEN_BLOQUE = { trafomix: 0, medidor: 1, transformador: 2 };
+  const ORDEN_BLOQUE = { trafomix: 0, medidor: 1, transformador: 2, ap: 0 };
 
   let puntos = [];
   let grupo = null;
@@ -135,12 +135,15 @@ const Ruta = (() => {
     armarGrafo();
 
     const lista = ordenados();
+    const lineaCompleta = [];
     for (let i = 1; i < lista.length; i++) {
       const linea = tramoEntre(lista[i - 1], lista[i]);
+      linea.forEach((c) => lineaCompleta.push(c));
       L.polyline(linea.map((c) => [c[1], c[0]]), {
         color: COLOR, weight: 4, opacity: 0.85,
       }).addTo(grupo);
     }
+    if (window.Sync && zona) Sync.sincronizarLineaRuta(zona, lineaCompleta);
 
     lista.forEach((p) => {
       L.marker([p.lat, p.lon], { icon: icono(p.orden, p.bloque), keyboard: false, zIndexOffset: 700 })
@@ -155,6 +158,21 @@ const Ruta = (() => {
      que tocó —si tocó la del medidor, arranca en MEDIDOR—, no en el primero
      incompleto: si tocó ese punto es porque quiere ese equipo. */
   async function abrirToma(p) {
+    // El punto de AP no pasa por Campana.irACliente() (esa lista es de
+    // clientes/trafomix): el punto ya trae todo lo que hace falta —sed,
+    // etiqueta, coordenadas— porque se registró solo al abrir esa toma.
+    if (p.bloque === 'ap') {
+      const [slug, alim] = String(p.zona).split('/');
+      AppBridge.closeSheet('#overlay-cliente');
+      AppBridge.closeSheet('#overlay-campana');
+      await EncuestaAp.abrir({
+        sed: p.sed, etiqueta: p.etiqueta || p.sed, nombre: '',
+        alimentador: alim, setSlug: slug, sistema: '',
+        lat: p.lat, lon: p.lon,
+      });
+      return;
+    }
+
     const [slug, alim] = String(p.zona).split('/');
     const cliente = await Campana.irACliente(slug, alim, p.sed);
     if (!cliente) {
@@ -246,6 +264,7 @@ const Ruta = (() => {
     await MapDB.putPuntoRuta(punto);
     puntos = puntos.filter((p) => p.id !== punto.id).concat(punto);
     redibujar();
+    if (window.Sync) Sync.sincronizarRuta();
 
     if (gps) {
       const lejos = Math.round(metros([punto.lon, punto.lat], [gps.lon, gps.lat]));
@@ -276,8 +295,12 @@ const Ruta = (() => {
      aparte) y quedaron puntos de esos tiempos en algunos celulares: el
      formulario no tiene ninguna pantalla que los muestre desde que el medidor
      pasó a compartir el punto del trafomix, así que no había forma de
-     borrarlos. Se limpian solos al entrar a la zona. */
-  const BLOQUES_VALIDOS = new Set(['trafomix', 'transformador']);
+     borrarlos. Se limpian solos al entrar a la zona.
+
+     "ap" es el punto que se registra solo al abrir la toma de datos de
+     Alumbrado Público (encuestaAp.js) — sin este agregado quedaría como
+     huérfano y se borraría solo la próxima vez que se cargara la zona. */
+  const BLOQUES_VALIDOS = new Set(['trafomix', 'transformador', 'ap']);
 
   /* Borra todos los puntos de un equipo (cualquier bloque), sin el aviso por
      punto de borrar(): lo usa borrar el equipo entero desde la lista, donde

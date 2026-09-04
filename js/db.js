@@ -1,7 +1,7 @@
 /* db.js — capa de acceso a IndexedDB para tiles de mapa y recortes (packs) offline */
 
 const DB_NAME = 'catastro-map-db';
-const DB_VERSION = 6;
+const DB_VERSION = 9;
 const STORE_TILES = 'tiles';
 const STORE_PACKS = 'packs';
 const STORE_NETWORK = 'network_features'; // postes, tramos, subestaciones cargados desde KMZ/KML
@@ -9,8 +9,12 @@ const STORE_ENCUESTAS = 'encuestas';      // una por cliente mayor (Fase 3)
 const STORE_FOTOS = 'fotos';              // Blobs aparte: listar encuestas no debe arrastrar MB
 const STORE_PAQUETES = 'paquetes';        // KMZ cargados por alimentador, versionados (Fase 2)
 const STORE_RUTA = 'ruta';                // migas numeradas que el técnico deja al recorrer
+const STORE_AP = 'ap';                    // tomas de datos de Alumbrado Público (Fase 5), una por SED
+const STORE_FOTOS_GPS = 'fotos_gps';      // {lat,lon,precision} por foto — antes solo se quemaba en los píxeles
 const STORE_SYNC_ENCUESTAS = 'sync_encuestas'; // qué "actualizado" de cada encuesta ya llegó al panel
+const STORE_SYNC_AP = 'sync_ap';               // qué "actualizado" de cada AP ya llegó al panel
 const STORE_SYNC_FOTOS = 'sync_fotos';         // qué claves de foto ya llegaron al panel
+const STORE_SYNC_RUTA = 'sync_ruta';           // qué puntos del recorrido (id+fecha) ya llegaron al panel
 
 let _dbPromise = null;
 
@@ -63,9 +67,34 @@ function openDB() {
         // que se subió por última vez con éxito.
         db.createObjectStore(STORE_SYNC_ENCUESTAS);
       }
+      if (!db.objectStoreNames.contains(STORE_SYNC_AP)) {
+        // Mismo criterio que STORE_SYNC_ENCUESTAS, para las tomas de AP.
+        db.createObjectStore(STORE_SYNC_AP);
+      }
       if (!db.objectStoreNames.contains(STORE_SYNC_FOTOS)) {
         // key: la misma clave que STORE_FOTOS, value: true
         db.createObjectStore(STORE_SYNC_FOTOS);
+      }
+      if (!db.objectStoreNames.contains(STORE_SYNC_RUTA)) {
+        // key: "<id del punto>|<fecha>", value: true. La fecha entra en la
+        // clave (no solo el id) para que "borrar y volver a marcar" — que
+        // reusa el mismo id — no quede marcado como ya sincronizado con las
+        // coordenadas viejas.
+        db.createObjectStore(STORE_SYNC_RUTA);
+      }
+      if (!db.objectStoreNames.contains(STORE_AP)) {
+        // La clave es el código SED (etiqueta de campo) — una toma de AP
+        // por SED, igual criterio que STORE_ENCUESTAS con el trafomix.
+        const store = db.createObjectStore(STORE_AP, { keyPath: 'sed' });
+        store.createIndex('setSlug', 'setSlug');
+        store.createIndex('alimentador', 'alimentador');
+        store.createIndex('estado', 'estado');
+      }
+      if (!db.objectStoreNames.contains(STORE_FOTOS_GPS)) {
+        // key: la misma clave que STORE_FOTOS. Antes el GPS de una foto
+        // solo se quemaba en los píxeles (timbrarFoto()); esto lo deja
+        // también como dato aparte, sin sacar el sello visual.
+        db.createObjectStore(STORE_FOTOS_GPS);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -333,10 +362,70 @@ async function deleteEncuesta(sed) {
   return deleteFotosDe(sed);
 }
 
+/* ---- ap: tomas de datos de Alumbrado Público (Fase 5) ---- */
+
+async function putAp(ap) {
+  const store = await tx(STORE_AP, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(ap);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getAp(sed) {
+  const store = await tx(STORE_AP, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(sed);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getAllAp() {
+  const store = await tx(STORE_AP, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteAp(sed) {
+  const store = await tx(STORE_AP, 'readwrite');
+  await new Promise((resolve, reject) => {
+    const req = store.delete(sed);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+  return deleteFotosDe(sed);
+}
+
 /* ---- fotos ---- */
 
 function fotoKey(sed, bloque, idFoto) {
   return `${sed}/${bloque}/${idFoto}`;
+}
+
+/* GPS estructurado por foto — antes solo se quemaba como texto en los
+   píxeles (timbrarFoto()). Guardarlo aparte permite mapear las fotos sin
+   tener que leer el sello con OCR. */
+async function putFotoGps(key, gps) {
+  const store = await tx(STORE_FOTOS_GPS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(gps, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getFotoGps(key) {
+  const store = await tx(STORE_FOTOS_GPS, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
 }
 
 async function putFoto(key, blob) {
@@ -359,8 +448,14 @@ async function getFoto(key) {
 
 async function deleteFoto(key) {
   const store = await tx(STORE_FOTOS, 'readwrite');
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const req = store.delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+  const storeGps = await tx(STORE_FOTOS_GPS, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = storeGps.delete(key);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
@@ -404,6 +499,24 @@ async function putSyncEncuesta(sed, actualizado) {
   });
 }
 
+async function getSyncAp(sed) {
+  const store = await tx(STORE_SYNC_AP, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(sed);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function putSyncAp(sed, actualizado) {
+  const store = await tx(STORE_SYNC_AP, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put({ sed, actualizado }, sed);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function fotoSincronizada(key) {
   const store = await tx(STORE_SYNC_FOTOS, 'readonly');
   return new Promise((resolve, reject) => {
@@ -417,6 +530,24 @@ async function marcarFotoSincronizada(key) {
   const store = await tx(STORE_SYNC_FOTOS, 'readwrite');
   return new Promise((resolve, reject) => {
     const req = store.put(true, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function rutaSincronizada(clave) {
+  const store = await tx(STORE_SYNC_RUTA, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.get(clave);
+    req.onsuccess = () => resolve(Boolean(req.result));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function marcarRutaSincronizada(clave) {
+  const store = await tx(STORE_SYNC_RUTA, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(true, clave);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
@@ -488,6 +619,18 @@ async function deletePuntoRuta(id) {
   });
 }
 
+/* Todos los puntos de TODAS las zonas — a diferencia de getRutaDeZona(), que
+   solo trae la activa. Lo usa sync.js para subir también lo que se marcó en
+   otros alimentadores mientras no había señal. */
+async function getTodosLosPuntosRuta() {
+  const store = await tx(STORE_RUTA, 'readonly');
+  return new Promise((resolve, reject) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function getTodosLosPaquetes() {
   const store = await tx(STORE_PAQUETES, 'readonly');
   return new Promise((resolve, reject) => {
@@ -549,13 +692,21 @@ window.MapDB = {
   getAllEncuestas,
   getEstadosEncuestas,
   deleteEncuesta,
+  putAp,
+  getAp,
+  getAllAp,
+  deleteAp,
   fotoKey,
   putFoto,
   getFoto,
   deleteFoto,
   listarFotoKeys,
+  putFotoGps,
+  getFotoGps,
   getSyncEncuesta,
   putSyncEncuesta,
+  getSyncAp,
+  putSyncAp,
   fotoSincronizada,
   marcarFotoSincronizada,
   zonaKey,
@@ -565,6 +716,9 @@ window.MapDB = {
   getPuntosDeToma,
   putPuntoRuta,
   deletePuntoRuta,
+  getTodosLosPuntosRuta,
+  rutaSincronizada,
+  marcarRutaSincronizada,
   getTodosLosPaquetes,
   activarPaquete,
   deletePaquete,

@@ -758,6 +758,19 @@ html, body {
   margin: -6px 0 12px;
 }
 
+/* Lectura anterior de oficina, mostrada arriba de "Lectura actual" en el
+   formulario de AP — para que el técnico vea "antes vs. lo que estoy por
+   cargar" sin subir hasta la ficha automática. */
+.campo-referencia {
+  font-size: 12.5px;
+  color: var(--accent);
+  background: rgba(245, 130, 42, 0.1);
+  border: 1px solid rgba(245, 130, 42, 0.3);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: -4px 0 12px;
+}
+
 .paso-pie { display: flex; gap: 8px; margin-top: 18px; }
 .paso-pie button { flex: 1; padding: 14px; font-size: 15px; }
 .paso-pie #encuesta-atras { flex: 0 0 33%; }
@@ -814,6 +827,24 @@ html, body {
 .campo input:focus,
 .campo select:focus,
 .campo textarea:focus { outline: none; border-color: var(--accent); }
+
+/* Buscador de SED por código en modo AP: la capa SED que carga la app viene
+   recortada a clientes mayores, así que un SED de Alumbrado Público no
+   siempre está dibujado — esto lo abre sin depender de tocar el mapa. */
+.ap-buscar { display: flex; gap: 8px; margin-bottom: 6px; }
+.ap-buscar input {
+  flex: 1;
+  min-width: 0;
+  padding: 13px;
+  font-size: 16px;
+  border-radius: 9px;
+  border: 1px solid #3a3b44;
+  background: #26272e;
+  color: var(--text);
+  font-family: inherit;
+}
+.ap-buscar input:focus { outline: none; border-color: var(--accent); }
+.ap-buscar .btn-primary { flex: 0 0 auto; padding: 0 18px; }
 
 /* ---------- Fotos ---------- */
 .foto-titulo {
@@ -1089,3 +1120,35 @@ button.mini.peligro { color: #f0645a; border-color: rgba(240,100,90,.4); }
 .carga-estado > div { flex: 1; min-width: 0; }
 .carga-titulo { font-size: 13px; font-weight: 700; color: var(--green); }
 .carga-sub { font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
+
+/* ---------- Visor de fotos (fotoVisor.js) ----------
+   Pantalla completa, encima de todo (overlays de la app incluidos). No usa
+   la pila de paneles de app.js a propósito: es un modal transitorio, no una
+   pantalla de navegación. */
+.foto-visor {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(10, 10, 12, .96);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.foto-visor.visible { display: flex; }
+.foto-visor-img { max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: 8px; }
+.foto-visor-cerrar {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.foto-visor-acciones { display: flex; gap: 10px; margin-top: 16px; width: 100%; max-width: 360px; }
+.foto-visor-acciones button { flex: 1; }

@@ -93,6 +93,88 @@ const Sync = (() => {
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   }
 
+  async function subirAp(registro) {
+    const res = await fetch(`${URL_BASE}/api/sync/ap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': API_KEY },
+      body: JSON.stringify({ registros: [registro] }),
+    });
+    if (!res.ok) throw new Error(`sync ap: ${res.status}`);
+    const { aplicados, rechazados } = await res.json();
+    const actualizado = aplicados.includes(registro.sed)
+      ? registro.actualizado
+      : (rechazados.find((r) => r.sed === registro.sed) || {}).actualizado;
+    if (actualizado) await MapDB.putSyncAp(registro.sed, actualizado);
+  }
+
+  /* Igual mecanismo que sincronizarUna(), para las tomas de AP
+     (encuestaAp.js) — datos + fotos, mismo store de fotos y misma clave
+     (`fotoKey`), solo cambia de qué IndexedDB store salen los datos. */
+  async function sincronizarUnaAp(sed) {
+    if (!navigator.onLine) return;
+    const registro = await MapDB.getAp(sed);
+    if (!registro) return;
+
+    const marca = await MapDB.getSyncAp(sed);
+    if (!marca || marca.actualizado !== registro.actualizado) {
+      try { await subirAp(registro); } catch { /* se reintenta en la próxima pasada */ }
+    }
+
+    const claves = clavesDeFotos(registro.fotos);
+    let idx = 0;
+    async function worker() {
+      while (idx < claves.length) {
+        const claveFoto = claves[idx++];
+        const keyLocal = keyLocalDeFoto(sed, claveFoto);
+        if (await MapDB.fotoSincronizada(keyLocal)) continue;
+        try { await subirFotoClave(sed, claveFoto, keyLocal); } catch { /* se reintenta en la próxima pasada */ }
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  }
+
+  /* Las migas del recorrido (repo/js/ruta.js): se suben todas juntas en un
+     solo POST, a diferencia de encuestas/fotos (una por una) — son muchas
+     menos y livianas, no vale la pena el mismo mecanismo cliente por
+     cliente. La clave de "ya sincronizado" lleva la fecha del punto pegada
+     (ver db.js): así "borrar y volver a marcar" —que reusa el mismo id—
+     no queda escondido detrás de una marca vieja. */
+  async function sincronizarRuta() {
+    if (!navigator.onLine) return;
+    const puntos = await MapDB.getTodosLosPuntosRuta();
+    const pendientes = [];
+    for (const p of puntos) {
+      const clave = `${p.id}|${p.fecha}`;
+      if (!(await MapDB.rutaSincronizada(clave))) pendientes.push(p);
+    }
+    if (!pendientes.length) return;
+    try {
+      const res = await fetch(`${URL_BASE}/api/sync/ruta`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': API_KEY },
+        body: JSON.stringify({ puntos: pendientes }),
+      });
+      if (!res.ok) throw new Error(`sync ruta: ${res.status}`);
+      for (const p of pendientes) await MapDB.marcarRutaSincronizada(`${p.id}|${p.fecha}`);
+    } catch { /* se reintenta en la próxima pasada */ }
+  }
+
+  /* La línea que conecta los puntos siguiendo los tramos MT: el panel no
+     tiene esa geometría para recalcularla, así que se manda ya calculada.
+     Es un snapshot que se pisa entero — no hay bookkeeping de qué ya se
+     subió, cuesta poco volver a mandarla. La llama Ruta.redibujar() cada
+     vez que el recorrido de la zona activa cambia. */
+  async function sincronizarLineaRuta(zona, coordinates) {
+    if (!navigator.onLine || !zona || coordinates.length < 2) return;
+    try {
+      await fetch(`${URL_BASE}/api/sync/ruta-linea`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': API_KEY },
+        body: JSON.stringify({ zona, coordinates }),
+      });
+    } catch { /* se reintenta en el próximo cambio del recorrido */ }
+  }
+
   /* Recorre TODAS las tomas de datos del celular. La usa el arranque de la
      app y el evento "online". */
   async function sincronizarTodo() {
@@ -102,6 +184,9 @@ const Sync = (() => {
     try {
       const todas = await MapDB.getAllEncuestas();
       for (const e of todas) await sincronizarUna(e.sed);
+      const todosAp = await MapDB.getAllAp();
+      for (const e of todosAp) await sincronizarUnaAp(e.sed);
+      await sincronizarRuta();
     } catch {
       /* sin señal a mitad de camino: se retoma en la próxima pasada */
     } finally {
@@ -116,7 +201,7 @@ const Sync = (() => {
   window.addEventListener('online', () => sincronizarTodo());
   if (navigator.onLine) sincronizarTodo();
 
-  return { sincronizarUna, sincronizarTodo };
+  return { sincronizarUna, sincronizarUnaAp, sincronizarTodo, sincronizarRuta, sincronizarLineaRuta };
 })();
 
 window.Sync = Sync;
