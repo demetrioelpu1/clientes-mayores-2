@@ -12,6 +12,7 @@ const Resultados = (() => {
 
   let esquema = null;
   let tipos = null;   // "bloque.campo" -> definición, para saber qué es número
+  let seleccionadas = new Set();   // seds marcados con el check, para bajar/borrar solo esos
 
   const $ = (sel) => document.querySelector(sel);
 
@@ -29,6 +30,7 @@ const Resultados = (() => {
 
   async function abrir() {
     await cargarEsquema();
+    seleccionadas = new Set();
     const todas = await MapDB.getAllEncuestas();
     render(todas);
     AppBridge.openSheet('#overlay-resultados');
@@ -63,14 +65,26 @@ const Resultados = (() => {
           </div>`).join('')
       : '';
 
+    const cabeceraLista = todas.length
+      ? `<div class="section-label res-lista-cabecera">
+           <span>TOMAS DE DATOS</span>
+           <label class="res-sel-todo">
+             <input type="checkbox" class="res-check" id="res-check-todo">
+             Seleccionar todo
+           </label>
+         </div>`
+      : '';
+
     const lista = todas.length
-      ? `<div class="section-label">TOMAS DE DATOS</div>` +
+      ? cabeceraLista +
         todas
           .slice()
           .sort((a, b) => (b.actualizado || '').localeCompare(a.actualizado || ''))
           .map((e) => `
             <div class="campana-fila" data-ver="${e.sed}"
                  data-set="${e.setSlug || ''}" data-alim="${e.alimentador || ''}">
+              <input type="checkbox" class="res-check" data-sel="${e.sed}"
+                     ${seleccionadas.has(e.sed) ? 'checked' : ''}>
               <div class="estado-punto ${e.estado === 'completa' ? 'completa' : 'borrador'}"></div>
               <div class="campana-info">
                 <div class="campana-nombre">${e.nombre || e.etiqueta || e.sed}</div>
@@ -80,10 +94,64 @@ const Resultados = (() => {
             </div>`).join('')
       : '<div class="campana-vacio">Todavía no hay ninguna toma de datos registrada.</div>';
 
-    $('#resultados-cuerpo').innerHTML = resumen + porSetHtml + lista;
+    const barraSeleccion = seleccionadas.size
+      ? `<div class="res-acciones">
+           <button class="mini peligro" id="resultados-borrar-sel" style="flex:1;padding:10px;">
+             🗑 Borrar ${seleccionadas.size} seleccionada(s)
+           </button>
+         </div>`
+      : '';
+
+    $('#resultados-cuerpo').innerHTML = resumen + porSetHtml + lista + barraSeleccion;
 
     $('#resultados-excel').disabled = todas.length === 0;
     $('#resultados-zip').disabled = todas.length === 0;
+    // Los botones bajan solo la selección si hay alguna marcada; si no hay
+    // ninguna, siguen bajando todo como siempre (no hace falta seleccionar
+    // nada para el uso de siempre).
+    $('#resultados-excel').textContent = seleccionadas.size
+      ? `⬇ Solo Excel (${seleccionadas.size})` : '⬇ Solo Excel';
+    $('#resultados-zip').textContent = seleccionadas.size
+      ? `⬇ Excel + fotos (${seleccionadas.size})` : '⬇ Excel + fotos';
+
+    /* El check no tiene que disparar la navegación de la fila (data-ver). */
+    $('#resultados-cuerpo').querySelectorAll('[data-sel]').forEach((chk) => {
+      chk.addEventListener('click', (ev) => ev.stopPropagation());
+      chk.addEventListener('change', () => {
+        if (chk.checked) seleccionadas.add(chk.dataset.sel);
+        else seleccionadas.delete(chk.dataset.sel);
+        render(todas);
+      });
+    });
+    const checkTodo = $('#res-check-todo');
+    if (checkTodo) {
+      checkTodo.addEventListener('click', (ev) => ev.stopPropagation());
+      checkTodo.addEventListener('change', () => {
+        seleccionadas = checkTodo.checked ? new Set(todas.map((e) => e.sed)) : new Set();
+        render(todas);
+      });
+    }
+    const btnBorrarSel = $('#resultados-borrar-sel');
+    if (btnBorrarSel) {
+      // Doble toque para confirmar, mismo patrón que "Eliminar" en los
+      // recortes de mapa (app.js) — nada de confirm() nativo en una PWA táctil.
+      let confirmando = false;
+      btnBorrarSel.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (!confirmando) {
+          confirmando = true;
+          btnBorrarSel.textContent = '¿Seguro? Tocá de nuevo';
+          setTimeout(() => {
+            confirmando = false;
+            if (document.body.contains(btnBorrarSel)) {
+              btnBorrarSel.textContent = `🗑 Borrar ${seleccionadas.size} seleccionada(s)`;
+            }
+          }, 3000);
+          return;
+        }
+        borrarSeleccionadas();
+      });
+    }
 
     /* Tocar una toma de datos lleva al equipo en el mapa y abre el formulario
        en el primer bloque que le falte. Sirve sobre todo para las que quedaron
@@ -101,6 +169,24 @@ const Resultados = (() => {
         Encuesta.abrir(cliente);
       });
     });
+  }
+
+  /* Borra la toma de datos completa (registro + fotos + su punto de
+     recorrido), igual que "Borrar" en un equipo nuevo de la lista de
+     clientes (campana.js). El doble toque de confirmación está en el botón
+     (ver render): acá puede ser más de una toma, y a diferencia del equipo
+     "nuevo" puede tratarse de tomas ya sincronizadas — no es tan reversible. */
+  async function borrarSeleccionadas() {
+    const seds = [...seleccionadas];
+    if (!seds.length) return;
+    for (const sed of seds) {
+      await MapDB.deleteEncuesta(sed);
+      if (window.Ruta) await Ruta.borrarTodos(sed);
+    }
+    seleccionadas = new Set();
+    const todas = await MapDB.getAllEncuestas();
+    render(todas);
+    AppBridge.showToast(`${seds.length} toma(s) borrada(s)`, 3000);
   }
 
   function fecha(iso) {
@@ -222,13 +308,27 @@ const Resultados = (() => {
     return `Toma de datos - ${zona} - ${hoy}`;
   }
 
-  async function descargarExcel() {
+  /* Si hay algo marcado con el check, exporta solo eso — así se puede bajar
+     de a partes cuando ya hay demasiadas tomas/fotos para armar todo junto
+     (ver descargarTodo). Sin nada marcado, se sigue bajando todo como
+     siempre. */
+  async function paraExportar() {
     const todas = await MapDB.getAllEncuestas();
-    if (!todas.length) return;
-    const bytes = construirLibro(todas);
-    bajar(bytes, `${nombreBase(todas)}.xlsx`,
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    AppBridge.showToast(`Excel con ${todas.length} fila(s) descargado`, 3000);
+    return seleccionadas.size ? todas.filter((e) => seleccionadas.has(e.sed)) : todas;
+  }
+
+  async function descargarExcel() {
+    const elegidas = await paraExportar();
+    if (!elegidas.length) return;
+    try {
+      const bytes = construirLibro(elegidas);
+      bajar(bytes, `${nombreBase(elegidas)}.xlsx`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      AppBridge.showToast(`Excel con ${elegidas.length} fila(s) descargado`, 3000);
+    } catch (err) {
+      console.error(err);
+      AppBridge.showToast('No se pudo armar el Excel. Probá de nuevo o con menos tomas seleccionadas.', 6000);
+    }
   }
 
   /* Carpeta por cliente, con el nombre de la foto tal como lo pide el formato. */
@@ -266,51 +366,63 @@ const Resultados = (() => {
   }
 
   async function descargarTodo() {
-    const todas = await MapDB.getAllEncuestas();
-    if (!todas.length) return;
+    const elegidas = await paraExportar();
+    if (!elegidas.length) return;
 
     AppBridge.showToast('Armando el paquete…', 8000);
-    const entradas = {};
-    entradas[`${nombreBase(todas)}.xlsx`] = construirLibro(todas, true);
+    try {
+      const entradas = {};
+      entradas[`${nombreBase(elegidas)}.xlsx`] = construirLibro(elegidas, true);
 
-    let nFotos = 0;
-    for (const e of todas) {
-      const carpeta = nombreCarpeta(e);
-      for (const clave of Object.keys(e.fotos || {})) {
-        const [bloqueId, fotoId] = clave.split('/');
-        const valor = e.fotos[clave];
-        const { n, label } = etiquetaFoto(bloqueId, fotoId, e);
-        const limpio = label.replace(/[\\/:*?"<>|]/g, '-');
-        const base = MapDB.fotoKey(e.sed, bloqueId, fotoId);
-        /* El nombre del archivo lleva el identificador del equipo además de la
-           carpeta: si una foto se saca de su carpeta —se reenvía suelta por
-           WhatsApp, se copia a otro lado— tiene que seguir diciendo de quién es. */
-        const nombreBase = `fotos/${carpeta}/${identificador(e)} - ${bloqueId} ${String(n).padStart(2, '0')} ${limpio}`;
+      let nFotos = 0;
+      for (const e of elegidas) {
+        const carpeta = nombreCarpeta(e);
+        for (const clave of Object.keys(e.fotos || {})) {
+          const [bloqueId, fotoId] = clave.split('/');
+          const valor = e.fotos[clave];
+          const { n, label } = etiquetaFoto(bloqueId, fotoId, e);
+          const limpio = label.replace(/[\\/:*?"<>|]/g, '-');
+          const base = MapDB.fotoKey(e.sed, bloqueId, fotoId);
+          /* El nombre del archivo lleva el identificador del equipo además de la
+             carpeta: si una foto se saca de su carpeta —se reenvía suelta por
+             WhatsApp, se copia a otro lado— tiene que seguir diciendo de quién es. */
+          const nombreBase = `fotos/${carpeta}/${identificador(e)} - ${bloqueId} ${String(n).padStart(2, '0')} ${limpio}`;
 
-        // "mediciones"/"extra" son grupos: cero, una o varias fotos guardadas
-        // como lista de sub-ids, no una sola como el resto de los campos.
-        const subIds = Array.isArray(valor) ? valor : null;
-        if (subIds) {
-          for (let i = 0; i < subIds.length; i++) {
-            const blob = await MapDB.getFoto(`${base}/${subIds[i]}`);
-            if (!blob) continue;
-            entradas[`${nombreBase} ${i + 1}.jpg`] = new Uint8Array(await blob.arrayBuffer());
-            nFotos++;
+          // "mediciones"/"extra" son grupos: cero, una o varias fotos guardadas
+          // como lista de sub-ids, no una sola como el resto de los campos.
+          const subIds = Array.isArray(valor) ? valor : null;
+          if (subIds) {
+            for (let i = 0; i < subIds.length; i++) {
+              const blob = await MapDB.getFoto(`${base}/${subIds[i]}`);
+              if (!blob) continue;
+              entradas[`${nombreBase} ${i + 1}.jpg`] = new Uint8Array(await blob.arrayBuffer());
+              nFotos++;
+            }
+            continue;
           }
-          continue;
+
+          const blob = await MapDB.getFoto(base);
+          if (!blob) continue;
+          entradas[`${nombreBase}.jpg`] = new Uint8Array(await blob.arrayBuffer());
+          nFotos++;
         }
-
-        const blob = await MapDB.getFoto(base);
-        if (!blob) continue;
-        entradas[`${nombreBase}.jpg`] = new Uint8Array(await blob.arrayBuffer());
-        nFotos++;
       }
-    }
 
-    // Las fotos ya son JPEG: recomprimirlas no gana nada y tarda mucho.
-    const zip = fflate.zipSync(entradas, { level: 0 });
-    bajar(zip, `${nombreBase(todas)}.zip`, 'application/zip');
-    AppBridge.showToast(`Paquete listo: ${todas.length} toma(s) y ${nFotos} foto(s)`, 4000);
+      // Las fotos ya son JPEG: recomprimirlas no gana nada y tarda mucho.
+      const zip = fflate.zipSync(entradas, { level: 0 });
+      bajar(zip, `${nombreBase(elegidas)}.zip`, 'application/zip');
+      AppBridge.showToast(`Paquete listo: ${elegidas.length} toma(s) y ${nFotos} foto(s)`, 4000);
+    } catch (err) {
+      // Con muchas tomas y fotos reales el paquete puede pesar cientos de MB:
+      // en un celular de gama baja `zipSync` puede quedarse sin memoria. Sin
+      // este catch, esto fallaba en silencio (el toast de "Armando..." se
+      // apagaba solo y no pasaba nada más) — para el técnico eso se ve
+      // igual que "no me deja descargar".
+      console.error(err);
+      AppBridge.showToast(
+        'No se pudo armar el paquete (probablemente por el tamaño). Marcá menos tomas con el check y probá de nuevo.',
+        7000);
+    }
   }
 
   return { abrir, descargarExcel, descargarTodo };
